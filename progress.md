@@ -42,3 +42,8 @@
 - Synthetic feature and quality tests cover tone, pitch step, silence, noise, nonfinite samples, short frames, clipping and SNR contrast.
 - `RealtimeFeatureRuntime` now uses the activity ratio/continuity and quality status from its single shared audio snapshot instead of running a second independent VAD pass.
 - Phase 6.2 full suite after feature/quality changes: 38 passed.
+- Added local CSV manifest mapping, speaker/recording connected-group splitting, calibrated StandardScaler + LinearSVC training, model metadata validation, offline emotion-only WAV classification, calibration/classification metrics, and noise/interferer evaluation conditions. No dataset/model weights exist in the repository, so real performance remains unevaluated.
+- Wired `AppConfig` into microphone, runtime, WAV quality analysis, and GUI model loading. Audio worker publishes a bounded latest-only `RuntimeSnapshot`; only the Tk main thread polls and renders. GUI explicitly reports an unconfigured speaker adapter and invalid emotion model state.
+- Code review found and fixed a mislabeled energy delta/slope mapping, missing activity-threshold compatibility metadata, training on windows the deployment-quality gate would reject, and evaluation failure when test labels were absent from model classes.
+- Targeted verification after these changes: 71 passed across the affected runtime, feature, training/evaluation, CLI, configuration and safety modules; `compileall`, `git diff --check`, and installed `emolight`, `emolight-train --help`, `emolight-evaluate --help` checks passed. Full suite was not run per repository instruction.
+- Actual microphone, real labeled data, trained real-world weights, speaker adapter, and hardware were not available; no real performance claim is made.

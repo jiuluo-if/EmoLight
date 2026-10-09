@@ -5,6 +5,7 @@ from emolight.features.prosody import (
     PROSODY_FEATURE_NAMES,
     PROSODY_SCHEMA_VERSION,
     extract_prosody,
+    _energy_summary,
 )
 
 
@@ -68,3 +69,15 @@ def test_short_input_is_padded_only_to_the_current_frame_boundary():
     assert features.values.shape == (32,)
     assert features.voiced_fraction == 0.0
     assert np.isfinite(features.values).all()
+
+
+def test_energy_delta_and_slope_values_follow_the_published_feature_names():
+    rms = np.asarray((1.0, 2.0, 4.0, 8.0))
+    times = np.asarray((0.0, 1.0, 2.0, 3.0))
+    deltas = np.diff(rms)
+
+    summary = _energy_summary(rms, deltas, times)
+
+    assert summary[8] == np.mean(deltas)
+    assert summary[9] == np.std(deltas)
+    assert summary[10] == np.polyfit(times, rms, 1)[0]

@@ -14,6 +14,9 @@
 - GitHub CLI keyring token 状态无效，但 Git Credential Manager 成功推送任务分支 `124a340`；远端只读读取偶有连接中断，需继续核对 SHA。
 - 身份门控修复后，全量测试为 30 passed；假 happy 预测器仅在 verifier 可信返回 TARGET_ACTIVE 后才会被调用，EmotionPrediction 不能编码 speaker/VAD 状态。
 - `prosody-v1` 特征和独立音频质量测试已通过；持续高响度噪声但没有非活动噪声参考会留在 UNCERTAIN，不能由 RMS 单独给高质量。
+- 新增本地 manifest、speaker/recording 连通组划分、校准线性 SVM 与 emotion-only 评估；`UNCERTAIN`/`LOW_QUALITY` 窗口不进入训练或评测的可用样本，避免训练与部署门控不一致。
+- 评审校正：RMS 差分/斜率索引已与发布的特征名对齐；模型元数据现包含活动阈值并在配置、训练和推理中校验；测试集中出现模型未训练的情绪类时，指标明确统计其支持数和零召回，而不是中止评测。
+- `joblib` 加载使用 pickle 语义，只应加载本地可信训练产物；仓库无模型文件，文档已保留该信任边界。没有做非可信第三方模型反序列化测试。
 
 ## Technical Decisions
 | Decision | Rationale |
@@ -31,6 +34,8 @@
 | 训练产物记录类别顺序、schema、采样参数、划分摘要和版本 | 防止运行时加载含义不一致或数据泄漏模型 |
 | 音频质量状态由活动帧、连续活动、削波和有静音噪声参考时的前景/底噪能量差共同判断 | 没有可用底噪参考时标记 UNCERTAIN；`audio_quality` 不再随 RMS 增大而变成高质量 |
 | 运行时由单一 `AcousticFeatures` 窗口快照提供活动比例、连续帧及质量门控 | 避免并行 VAD 与质量计算因窗口错位而产生不一致判断 |
+| 训练仅接受 `ACCEPTABLE` 音频，评测对不合格/不确定输入计算拒识率 | 训练样本与实际可输出预测的质量域一致，报告不把不确定窗口当作可识别样本 |
+| 模型元数据固定活动 RMS 阈值，训练与推理共享完整 `prosody-v1` 参数 | 阈值会改变活动/停顿特征；只比较采样率和帧长不足以保证特征列含义相同 |
 
 ## Issues Encountered
 | Issue | Resolution |

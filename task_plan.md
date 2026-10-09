@@ -4,7 +4,7 @@
 在现有 EmoLight PC MVP 上增量建立可真实评测的非语义声学情绪分类与严格目标身份门控，同时保持默认拒识和原 CLI/演示兼容。
 
 ## Next Step
-为本地数据 manifest 和 speaker/recording 连通分组划分编写泄漏测试，再实现 dataset adapters。
+完成代码审查与交付验证，检查远端 SHA 后提交并推送当前任务分支。
 
 ## Current Phase
 Phase 6
@@ -84,20 +84,30 @@ Phase 6
 - **Status:** complete
 
 ### Phase 6.3: Trainable CPU baseline
-- [ ] 添加 manifest dataset adapter 和 speaker/recording-connected split
-- [ ] 添加 StandardScaler + calibrated LinearSVC 训练、元数据和安全加载
-- [ ] 模型缺失/损坏/schema/class mismatch 均 fail-closed
-- [ ] 添加显式离线 emotion-only CLI，不生成目标身份结论
+- [x] 添加 manifest dataset adapter 和 speaker/recording-connected split
+- [x] 添加 StandardScaler + calibrated LinearSVC 训练、元数据和安全加载
+- [x] 模型缺失/损坏/schema/class mismatch 均 fail-closed
+- [x] 添加显式离线 emotion-only CLI，不生成目标身份结论
+- **Status:** complete
 
 ### Phase 6.4: Evaluation and robustness
-- [ ] 训练、验证和测试工具输出 Macro-F1、UAR、每类 PR、混淆矩阵、校准指标
-- [ ] 支持 20/10/5/0 dB 噪声和独立他人语音混入比例实验
-- [ ] 记录划分谱系、模型大小、CPU 延迟和峰值内存；合成数据只测流程
-- [ ] 没有真实标注数据时，标记真实训练/性能未完成，不伪造指标
+- [x] 训练、验证和测试工具输出 Macro-F1、UAR、每类 PR、混淆矩阵、校准指标
+- [x] 支持 20/10/5/0 dB 噪声和独立他人语音混入比例实验
+- [x] 记录划分谱系、模型大小、CPU 延迟和峰值内存；合成数据只测流程
+- [x] 没有真实标注数据时，标记真实训练/性能未完成，不伪造指标
+- **Status:** complete
 
 ### Phase 6.5: Quality, runtime, and delivery
 - [x] 最小活动比例及连续帧门控；同一窗口快照共享质量和预测
-- [ ] 统一音频采样率/窗口/刷新配置；结果队列 latest-only 且有界
-- [ ] 补充 .gitignore、README、移除文档中的本地个人路径
-- [ ] 全量测试、代码审查、提交并推送任务分支
+- [x] 统一音频采样率/窗口/刷新配置；结果队列 latest-only 且有界
+- [x] 补充 .gitignore、README、移除文档中的本地个人路径
+- [ ] 选择性回归测试、代码审查、提交并推送任务分支
 - **Status:** in_progress
+
+### Phase 6 verification notes
+- [x] 基础回归与新增功能相关测试：71 passed（选择性测试，未运行全量测试套件）
+- [x] `compileall` 与 `git diff --check`
+- [x] `emolight --no-gui`、`emolight-train --help`、`emolight-evaluate --help`
+- [x] 评审发现的特征索引、quality 域、时序阈值和未知类别指标问题已修复并有测试
+- [x] 代码复查与发现问题修复完成
+- [ ] 提交、推送与远端 SHA 核对

@@ -43,3 +43,14 @@ def test_low_snr_and_clipping_are_distinct_quality_failures():
     assert low_features.quality_status is AudioQualityStatus.LOW_QUALITY
     assert clip_features.clipping_fraction == 1.0
     assert clip_features.quality_status is AudioQualityStatus.LOW_QUALITY
+
+
+def test_vad_frame_duration_is_configurable_for_consistent_runtime_settings():
+    samples = np.full(SAMPLE_RATE, 0.001, dtype=np.float32)
+    samples[4000:4500] = 0.1
+    audio = AudioBuffer(samples, SAMPLE_RATE)
+
+    short_frames = extract_features(audio, frame_ms=25.0)
+    long_frames = extract_features(audio, frame_ms=50.0)
+
+    assert short_frames.active_frame_count != long_frames.active_frame_count

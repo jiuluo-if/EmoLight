@@ -26,19 +26,38 @@ class AcousticFeatures:
     longest_active_run: int = 0
     estimated_snr_db: float | None = None
     quality_status: AudioQualityStatus = AudioQualityStatus.UNCERTAIN
+    vad_frame_ms: float = 25.0
 
 
-def extract_features(audio: AudioBuffer) -> AcousticFeatures:
+def extract_features(
+    audio: AudioBuffer,
+    *,
+    frame_ms: float = 25.0,
+    activity_rms_threshold: float = 0.01,
+    min_activity_ratio: float = 0.20,
+    min_contiguous_active_frames: int = 3,
+    clipping_limit: float = 0.05,
+    minimum_snr_db: float = 5.0,
+    acceptable_snr_db: float = 10.0,
+) -> AcousticFeatures:
     samples = np.asarray(audio.samples, dtype=np.float32)
     if samples.ndim != 1 or audio.sample_rate <= 0:
         raise ValueError("audio must be mono with a positive sample rate")
+    if frame_ms <= 0 or activity_rms_threshold < 0:
+        raise ValueError("frame_ms must be positive and activity threshold non-negative")
+    if not 0.0 <= min_activity_ratio <= 1.0 or min_contiguous_active_frames < 1:
+        raise ValueError("activity ratio must be bounded and contiguous frame count positive")
+    if not 0.0 <= clipping_limit <= 1.0 or minimum_snr_db >= acceptable_snr_db:
+        raise ValueError("clipping limit or SNR thresholds are invalid")
     if samples.size == 0:
-        return AcousticFeatures(0.0, 0.0, 0.0, 0.0, 0.0, quality_status=AudioQualityStatus.LOW_QUALITY)
+        return AcousticFeatures(0.0, 0.0, 0.0, 0.0, 0.0, quality_status=AudioQualityStatus.LOW_QUALITY, vad_frame_ms=frame_ms)
     samples = np.nan_to_num(samples, nan=0.0, posinf=1.0, neginf=-1.0)
     rms = float(np.sqrt(np.mean(np.square(samples), dtype=np.float64)))
     zcr = float(np.mean(np.signbit(samples[1:]) != np.signbit(samples[:-1]))) if len(samples) > 1 else 0.0
     clipping = float(np.mean(np.abs(samples) >= 0.999))
-    frames = EnergyVAD().process(AudioBuffer(samples, audio.sample_rate))
+    frames = EnergyVAD(frame_ms=round(frame_ms), threshold_rms=activity_rms_threshold).process(
+        AudioBuffer(samples, audio.sample_rate)
+    )
     active = [frame.status is SystemStatus.UNCERTAIN for frame in frames]
     active_levels = np.asarray([frame.energy_rms for frame, is_active in zip(frames, active) if is_active])
     inactive_levels = np.asarray([frame.energy_rms for frame, is_active in zip(frames, active) if not is_active])
@@ -54,13 +73,13 @@ def extract_features(audio: AudioBuffer) -> AcousticFeatures:
         estimated_snr_db = float(10.0 * np.log10(foreground_power / noise_power))
         quality = max(0.0, min(1.0, estimated_snr_db / 30.0))
 
-    if clipping >= 0.05 or activity_ratio < 0.20 or longest_active_run < 3:
+    if clipping >= clipping_limit or activity_ratio < min_activity_ratio or longest_active_run < min_contiguous_active_frames:
         quality_status = AudioQualityStatus.LOW_QUALITY
     elif estimated_snr_db is None:
         quality_status = AudioQualityStatus.UNCERTAIN
-    elif estimated_snr_db < 5.0:
+    elif estimated_snr_db < minimum_snr_db:
         quality_status = AudioQualityStatus.LOW_QUALITY
-    elif estimated_snr_db < 10.0:
+    elif estimated_snr_db < acceptable_snr_db:
         quality_status = AudioQualityStatus.UNCERTAIN
     else:
         quality_status = AudioQualityStatus.ACCEPTABLE
@@ -75,6 +94,7 @@ def extract_features(audio: AudioBuffer) -> AcousticFeatures:
         longest_active_run=longest_active_run,
         estimated_snr_db=estimated_snr_db,
         quality_status=quality_status,
+        vad_frame_ms=frame_ms,
     )
 
 

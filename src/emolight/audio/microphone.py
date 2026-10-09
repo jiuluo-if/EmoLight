@@ -39,7 +39,15 @@ class MicrophoneAudioSource:
             try:
                 self._frames.put_nowait(indata[:, 0].copy())
             except queue.Full:
-                self.dropped_frames += 1
+                try:
+                    self._frames.get_nowait()
+                    self.dropped_frames += 1
+                except queue.Empty:
+                    pass
+                try:
+                    self._frames.put_nowait(indata[:, 0].copy())
+                except queue.Full:
+                    self.dropped_frames += 1
 
         try:
             self._stream = sd.InputStream(

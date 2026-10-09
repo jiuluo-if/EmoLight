@@ -44,6 +44,48 @@ def test_cli_reads_wav_and_reports_features_without_guessing_emotion(tmp_path, c
     assert payload["event"]["emotion"] is None
 
 
+def test_wav_analysis_passes_audio_quality_settings_from_config(tmp_path, capsys, monkeypatch):
+    import emolight.cli as cli
+
+    wav_path = tmp_path / "configured.wav"
+    samples = (np.sin(2 * np.pi * 180 * np.arange(8000) / 8000) * 5000).astype(np.int16)
+    with wave.open(str(wav_path), "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(8000)
+        wav.writeframes(samples.tobytes())
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps({"audio": {
+        "frame_ms": 20.0,
+        "activity_rms_threshold": 0.03,
+        "min_activity_ratio": 0.35,
+        "min_contiguous_active_frames": 4,
+        "clipping_limit": 0.03,
+        "minimum_snr_db": 6.0,
+        "acceptable_snr_db": 12.0,
+    }}), encoding="utf-8")
+    real_extract_features = cli.extract_features
+    observed = {}
+
+    def capture_settings(audio, **kwargs):
+        observed.update(kwargs)
+        return real_extract_features(audio, **kwargs)
+
+    monkeypatch.setattr(cli, "extract_features", capture_settings)
+    assert run(["--no-gui", "--wav", str(wav_path), "--config", str(config_path)]) == 0
+    capsys.readouterr()
+
+    assert observed == {
+        "frame_ms": 20.0,
+        "activity_rms_threshold": 0.03,
+        "min_activity_ratio": 0.35,
+        "min_contiguous_active_frames": 4,
+        "clipping_limit": 0.03,
+        "minimum_snr_db": 6.0,
+        "acceptable_snr_db": 12.0,
+    }
+
+
 def test_cli_reports_invalid_wav_without_traceback(capsys, tmp_path):
     result = run(["--no-gui", "--wav", str(tmp_path / "absent.wav")])
 
@@ -56,3 +98,66 @@ def test_installed_console_entrypoint_runs_headless(monkeypatch, capsys):
 
     assert main() == 0
     assert json.loads(capsys.readouterr().out)["event"]["status"] == "NOT_CONFIGURED"
+
+
+def test_offline_emotion_only_never_claims_target_identity_when_model_is_missing(tmp_path, capsys):
+    wav_path = tmp_path / "offline.wav"
+    samples = np.full(16000, 50, dtype=np.int16)
+    times = np.arange(8000) / 16000
+    samples[8000:] += (np.sin(2 * np.pi * 220 * times) * 3200).astype(np.int16)
+    with wave.open(str(wav_path), "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(16000)
+        wav.writeframes(samples.tobytes())
+
+    assert run([
+        "--no-gui", "--emotion-only", "--wav", str(wav_path),
+        "--model", str(tmp_path / "missing.joblib"),
+    ]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["mode"] == "OFFLINE_EMOTION_ONLY"
+    assert payload["identity_status"] == "NOT_EVALUATED"
+    assert payload["target_event"] is None
+    assert payload["prediction"]["status"] == "NOT_CONFIGURED"
+    assert payload["prediction"]["emotion"] is None
+
+
+def test_offline_emotion_only_uses_configured_model_frame_and_hop(tmp_path, capsys):
+    from emolight.emotion.sklearn_predictor import fit_calibrated_svm, save_model_artifact
+
+    rng = np.random.default_rng(41)
+    feature_rows, labels, groups = [], [], []
+    for speaker in range(12):
+        for index, label in enumerate(("neutral", "happy", "angry", "sad")):
+            row = rng.normal(0.0, 0.08, 32)
+            row[index] += 3.0
+            feature_rows.append(row)
+            labels.append(label)
+            groups.append(f"speaker-{speaker}")
+    model = fit_calibrated_svm(
+        np.asarray(feature_rows), labels, groups, frame_ms=20.0, hop_ms=5.0,
+    )
+    model_path = tmp_path / "model.joblib"
+    save_model_artifact(model_path, model)
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps({"audio": {"frame_ms": 20.0, "hop_ms": 5.0}}), encoding="utf-8")
+    wav_path = tmp_path / "voice.wav"
+    samples = np.full(16000, 50, dtype=np.int16)
+    times = np.arange(8000) / 16000
+    samples[8000:] += (np.sin(2 * np.pi * 220 * times) * 7000).astype(np.int16)
+    with wave.open(str(wav_path), "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(16000)
+        wav.writeframes(samples.tobytes())
+
+    assert run([
+        "--no-gui", "--emotion-only", "--wav", str(wav_path), "--model", str(model_path),
+        "--config", str(config_path),
+    ]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["prediction"]["status"] == "READY"
+    assert payload["prediction"]["model_status"] == "READY"
+    assert payload["prediction"]["emotion"] is not None
+    assert payload["identity_status"] == "NOT_EVALUATED"

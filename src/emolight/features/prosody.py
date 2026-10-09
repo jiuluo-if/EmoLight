@@ -29,6 +29,7 @@ class ProsodyFeatures:
     hop_length_samples: int
     frame_count: int
     voiced_fraction: float
+    activity_rms_threshold: float = 0.01
 
     def __post_init__(self) -> None:
         values = np.array(self.values, dtype=np.float32, copy=True)
@@ -42,6 +43,8 @@ class ProsodyFeatures:
             raise ValueError("prosody sampling metadata must be positive")
         if not 0.0 <= self.voiced_fraction <= 1.0 or self.frame_count < 0:
             raise ValueError("prosody frame metadata is invalid")
+        if not np.isfinite(self.activity_rms_threshold) or self.activity_rms_threshold < 0.0:
+            raise ValueError("activity_rms_threshold must be finite and non-negative")
         values.setflags(write=False)
         object.__setattr__(self, "values", values)
 
@@ -126,6 +129,7 @@ def extract_prosody(
         hop_length_samples=hop_size,
         frame_count=rms_values.size,
         voiced_fraction=voiced_fraction,
+        activity_rms_threshold=activity_rms_threshold,
     )
 
 
@@ -188,13 +192,15 @@ def _energy_summary(rms: np.ndarray, deltas: np.ndarray, times: np.ndarray) -> n
     result = np.zeros(11, dtype=np.float64)
     if rms.size:
         logged = np.log(np.maximum(rms, 1e-8))
-        result[:9] = (
+        result[:8] = (
             np.mean(rms), np.std(rms), np.quantile(rms, 0.1), np.median(rms),
             np.quantile(rms, 0.9), np.max(rms) - np.min(rms),
-            np.mean(logged), np.std(logged), _slope(times, rms),
+            np.mean(logged), np.std(logged),
         )
     if deltas.size:
-        result[9:11] = (np.mean(deltas), np.std(deltas))
+        result[8:10] = (np.mean(deltas), np.std(deltas))
+    if rms.size:
+        result[10] = _slope(times, rms)
     return result
 
 

@@ -4,6 +4,7 @@ from typing import Mapping, Protocol
 
 from emolight.events import Emotion, EmotionEvent, EventSource, SystemStatus
 from emolight.features.acoustic import AcousticFeatures, AudioQualityStatus
+from emolight.features.prosody import ProsodyFeatures
 
 
 class ModelStatus(str, Enum):
@@ -65,18 +66,27 @@ class EmotionPrediction:
 
 
 class EmotionPredictor(Protocol):
-    def predict(self, features: AcousticFeatures, timestamp_ms: int = 0) -> EmotionPrediction: ...
+    def predict(self, features: ProsodyFeatures, timestamp_ms: int = 0) -> EmotionPrediction: ...
 
 
 class UnconfiguredEmotionPredictor:
     """Fail-closed predictor used until a trained and verified model is installed."""
 
-    def predict(self, features: AcousticFeatures, timestamp_ms: int = 0) -> EmotionPrediction:
-        rejection = SystemStatus.LOW_QUALITY if features.quality_status is AudioQualityStatus.LOW_QUALITY else None
+    def predict(
+        self,
+        features: AcousticFeatures | ProsodyFeatures,
+        timestamp_ms: int = 0,
+    ) -> EmotionPrediction:
+        audio_quality = features.audio_quality if isinstance(features, AcousticFeatures) else 0.0
+        rejection = (
+            SystemStatus.LOW_QUALITY
+            if isinstance(features, AcousticFeatures) and features.quality_status is AudioQualityStatus.LOW_QUALITY
+            else None
+        )
         return EmotionPrediction(
             emotion=None,
             model_status=ModelStatus.NOT_CONFIGURED,
             rejection_status=rejection,
             timestamp_ms=timestamp_ms,
-            audio_quality=features.audio_quality,
+            audio_quality=audio_quality,
         )
