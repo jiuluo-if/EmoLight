@@ -20,9 +20,13 @@ class DatasetSplit:
     validation_group_ids: tuple[int, ...]
     test_group_ids: tuple[int, ...]
 
-    def to_metadata(self) -> dict:
+    def to_metadata(self, *, include_test_labels: bool = True) -> dict:
         subsets = {
-            name: _subset_summary(records, self.group_counts[index])
+            name: _subset_summary(
+                records,
+                self.group_counts[index],
+                include_class_counts=name != "test" or include_test_labels,
+            )
             for index, (name, records) in enumerate((
                 ("train", self.train),
                 ("validation", self.validation),
@@ -94,6 +98,38 @@ def split_by_speaker_and_recording(records, *, seed: int = 42) -> DatasetSplit:
     if not records:
         raise ValueError("cannot split an empty manifest")
     groups = _connected_groups(records)
+    if any(record.preassigned_split for record in records):
+        if not all(record.preassigned_split in ("train", "validation", "test") for record in records):
+            raise ValueError("preassigned split must be supplied for every manifest record")
+        split_by_group: dict[int, str] = {}
+        for group_id, record in zip(groups.tolist(), records):
+            previous = split_by_group.setdefault(int(group_id), record.preassigned_split)
+            if previous != record.preassigned_split:
+                raise ValueError("connected source group has conflicting preassigned splits")
+        split_indices = tuple(
+            {index for index, record in enumerate(records) if record.preassigned_split == name}
+            for name in ("train", "validation", "test")
+        )
+        split_records = [tuple(records[index] for index in sorted(indices)) for indices in split_indices]
+        if any(not subset for subset in split_records):
+            raise ValueError("preassigned speaker-exclusive split must contain train, validation, and test records")
+        if len({record.emotion for record in split_records[0]}) < 2:
+            raise ValueError("training split contains fewer than two emotion classes")
+        split_groups = [set(groups[list(indices)].tolist()) for indices in split_indices]
+        if any(split_groups[left] & split_groups[right] for left in range(3) for right in range(left + 1, 3)):
+            raise RuntimeError("preassigned group splitter leaked a speaker or source recording across splits")
+        return DatasetSplit(
+            train=split_records[0],
+            validation=split_records[1],
+            test=split_records[2],
+            seed=seed,
+            method="preassigned speaker-exclusive official dataset split",
+            group_counts=tuple(len(group_set) for group_set in split_groups),
+            train_group_ids=tuple(int(groups[index]) for index in sorted(split_indices[0])),
+            validation_group_ids=tuple(int(groups[index]) for index in sorted(split_indices[1])),
+            test_group_ids=tuple(int(groups[index]) for index in sorted(split_indices[2])),
+        )
+
     group_count = int(np.unique(groups).size)
     if group_count < 5:
         raise ValueError("at least 5 independent speaker/recording groups are required")
@@ -126,17 +162,24 @@ def split_by_speaker_and_recording(records, *, seed: int = 42) -> DatasetSplit:
     )
 
 
-def _subset_summary(records: tuple[ManifestRecord, ...], group_count: int) -> dict:
+def _subset_summary(
+    records: tuple[ManifestRecord, ...],
+    group_count: int,
+    *,
+    include_class_counts: bool = True,
+) -> dict:
     labels = ("neutral", "happy", "angry", "sad")
-    class_counts = {label: sum(record.emotion.value == label for record in records) for label in labels}
-    return {
+    summary = {
         "sample_count": len(records),
         "speaker_count": len({(record.dataset_id, record.speaker_id) for record in records}),
         "group_count": group_count,
-        "class_counts": class_counts,
-        "missing_classes": [label for label, count in class_counts.items() if count == 0],
         "dataset_counts": {
             dataset_id: sum(record.dataset_id == dataset_id for record in records)
             for dataset_id in sorted({record.dataset_id for record in records})
         },
     }
+    if include_class_counts:
+        class_counts = {label: sum(record.emotion.value == label for record in records) for label in labels}
+        summary["class_counts"] = class_counts
+        summary["missing_classes"] = [label for label, count in class_counts.items() if count == 0]
+    return summary

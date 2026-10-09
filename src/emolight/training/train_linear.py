@@ -48,15 +48,27 @@ def train_linear_models(
     background_noise_manifest_path: str | Path | None = None,
     background_noise_augmentation_snr_db: Sequence[float] = (),
     augment_reverb: bool = False,
+    dataset_metadata_path: str | Path | None = None,
+    window_s: float = 1.5,
+    update_interval_s: float = 0.5,
     label_map: Mapping[str, str | Emotion] | None = None,
 ) -> dict:
     """Fit simple/full models, calibrate only on validation, and leave test untouched."""
+    if not np.isfinite(window_s) or not np.isfinite(update_interval_s) or window_s <= 0 or update_interval_s <= 0:
+        raise ValueError("inference window and update interval must be finite and positive")
+    dataset_provenance = None
+    if dataset_metadata_path is not None:
+        dataset_provenance = json.loads(Path(dataset_metadata_path).read_text(encoding="utf-8"))
+        if not isinstance(dataset_provenance, dict) or not dataset_provenance.get("dataset_id"):
+            raise ValueError("dataset metadata must be a JSON object with dataset_id")
+        dataset_provenance = _without_test_label_counts(dataset_provenance)
     manifest = load_manifest(manifest_path, label_map=label_map)
     if not manifest.records:
         raise ValueError("manifest has no supported labeled audio rows")
     split = split_by_speaker_and_recording(manifest.records, seed=seed)
-    split_metadata = split.to_metadata()
-    all_classes = {record.emotion.value for record in manifest.records}
+    split_metadata = split.to_metadata(include_test_labels=False)
+    # Define required classes from development subsets only; never inspect test labels for training checks.
+    all_classes = {record.emotion.value for record in (*split.train, *split.validation)}
     train_classes = {record.emotion.value for record in split.train}
     if train_classes != all_classes:
         missing = sorted(all_classes - train_classes)
@@ -186,6 +198,8 @@ def train_linear_models(
             frame_ms=frame_ms,
             hop_ms=hop_ms,
             activity_rms_threshold=activity_rms_threshold,
+            window_s=window_s,
+            update_interval_s=update_interval_s,
             training_manifest_sha256=hashlib.sha256(Path(manifest_path).read_bytes()).hexdigest(),
             label_mapping=manifest.label_mapping,
         )
@@ -193,6 +207,8 @@ def train_linear_models(
             "sample_count": len(train_labels),
             "original_sample_count": len(accepted_records["train"]),
             "augmented_sample_count": len(train_labels) - len(accepted_records["train"]),
+            "recording_count": len({record.recording_id for record in accepted_records["train"]}),
+            "speaker_count": len({(record.dataset_id, record.speaker_id) for record in accepted_records["train"]}),
             "class_counts": _class_counts(train_labels),
             "split_method": split.method,
             "seed": seed,
@@ -203,6 +219,12 @@ def train_linear_models(
             "reverb_augmentation_enabled": augment_reverb,
             "reverb_augmented_sample_count": reverb_augmented,
             "augmented_rows_by_snr": dict(augmentation_counts),
+        }
+        artifact["window_s"] = float(window_s)
+        artifact["update_interval_s"] = float(update_interval_s)
+        artifact["dataset_provenance"] = dataset_provenance or {
+            "dataset_id": ",".join(sorted({record.dataset_id for record in manifest.records})),
+            "source": "user-provided manifest; see manifest metadata",
         }
         artifact["validation"].update({
             "class_counts": _class_counts(validation_labels),
@@ -299,6 +321,8 @@ def _fit_profile(
     frame_ms: float,
     hop_ms: float,
     activity_rms_threshold: float,
+    window_s: float,
+    update_interval_s: float,
     training_manifest_sha256: str,
     label_mapping: dict[str, str],
 ) -> dict:
@@ -359,6 +383,8 @@ def _fit_profile(
         "frame_ms": float(frame_ms),
         "hop_ms": float(hop_ms),
         "activity_rms_threshold": float(activity_rms_threshold),
+        "window_s": float(window_s),
+        "update_interval_s": float(update_interval_s),
         "quality_gates": {
             "min_activity_ratio": 0.20,
             "min_contiguous_active_frames": 3,
@@ -495,6 +521,16 @@ def _parameter_count(artifact: dict) -> int:
     )
 
 
+def _without_test_label_counts(metadata: dict) -> dict:
+    """Keep held-out label distributions out of the training artifact."""
+    result = dict(metadata)
+    for field in ("official_gold_class_counts", "split_window_class_counts"):
+        value = result.get(field)
+        if isinstance(value, dict):
+            result[field] = {split: counts for split, counts in value.items() if split != "test"}
+    return result
+
+
 def _write_json_atomically(path: Path, artifact: dict) -> int:
     fd, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
     os.close(fd)
@@ -523,6 +559,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--augmentation-noise-manifest")
     parser.add_argument("--augment-background-snr", type=float, nargs="*", default=())
     parser.add_argument("--augment-reverb", action="store_true")
+    parser.add_argument("--dataset-metadata", help="JSON provenance emitted by the dataset preparation tool")
+    parser.add_argument("--window-s", type=float, default=1.5)
+    parser.add_argument("--update-interval-s", type=float, default=0.5)
     parser.add_argument("--label-map")
     args = parser.parse_args(argv)
     try:
@@ -541,6 +580,9 @@ def main(argv: list[str] | None = None) -> int:
             background_noise_manifest_path=args.augmentation_noise_manifest,
             background_noise_augmentation_snr_db=args.augment_background_snr,
             augment_reverb=args.augment_reverb,
+            dataset_metadata_path=args.dataset_metadata,
+            window_s=args.window_s,
+            update_interval_s=args.update_interval_s,
             label_map=label_map,
         )
     except (OSError, ValueError, RuntimeError) as error:

@@ -18,8 +18,10 @@ ml = ["scikit-learn>=1.5", "psutil>=5.9"]
 [project.scripts]
 emolight = "emolight.cli:main"
 emolight-train = "emolight.training.train_linear:main"
+emolight-prepare-emodb = "emolight.training.prepare_emodb:main"
 emolight-evaluate = "emolight.training.evaluate:main"
 emolight-predict = "emolight.training.predict_linear:main"
+emolight-live-experimental = "emolight.training.live_emotion_only:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

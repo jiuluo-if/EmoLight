@@ -197,7 +197,7 @@ def evaluate_manifest(
     if seed is not None and seed != selected_seed:
         return _not_evaluated("SPLIT_MISMATCH", requested_seed=seed, trained_seed=selected_seed)
     split = split_by_speaker_and_recording(manifest.records, seed=selected_seed)
-    if split.to_metadata() != model.get("dataset_split"):
+    if split.to_metadata(include_test_labels=False) != model.get("dataset_split"):
         return _not_evaluated("SPLIT_MISMATCH")
 
     classes = tuple(model["classes"])
@@ -279,6 +279,7 @@ def evaluate_manifest(
     wall_seconds = (time.perf_counter_ns() - wall_started) / 1e9
     cpu_seconds = (cpu_after.user - cpu_before.user) + (cpu_after.system - cpu_before.system)
     test_split_summary = split.to_metadata()["subsets"]["test"]
+    dataset_provenance = model.get("dataset_provenance", {})
     parameter_count = _model_parameter_count(model)
     return {
         "status": "EVALUATED_USER_ATTESTED_LABELED_DATA",
@@ -288,6 +289,10 @@ def evaluate_manifest(
         "interpretation": "Emotion-only held-out evaluation; no speaker verification or clinical inference.",
         "model_version": model["model_version"],
         "model_profile": model["feature_profile"],
+        "dataset_provenance": dataset_provenance,
+        "inference_window_s": model.get("window_s"),
+        "inference_update_interval_s": model.get("update_interval_s"),
+        "evaluation_unit": "manifest row; this dataset contains overlapping windows, so rows from one utterance are correlated",
         "model_size_bytes": predictor.model_size_bytes,
         "model_parameter_count": parameter_count,
         "model_validation": {
@@ -301,6 +306,8 @@ def evaluate_manifest(
         "manifest_sha256": manifest_hash,
         "seed": selected_seed,
         "test_record_count": len(split.test),
+        "test_unique_recording_count": len({(record.dataset_id, record.recording_id) for record in split.test}),
+        "test_speaker_ids": sorted({record.speaker_id for record in split.test}),
         "test_class_counts": test_split_summary["class_counts"],
         "test_missing_classes": test_split_summary["missing_classes"],
         "latency_ms": {

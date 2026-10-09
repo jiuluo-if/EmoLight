@@ -17,6 +17,18 @@
 - 最终验证：`python -m pytest -q` **96 passed**；`python -m compileall -q src scripts`、`git diff --check`、`emolight --no-gui`、`emolight-train --help`、`emolight-evaluate --help` 均通过。未用合成数据声称真实性能，未验证真实麦克风/真实噪声/灯带硬件。
 - 灯光模块 `src/emolight/lighting/` 未修改。Phase 3 分支待提交并推送；不合并 main。
 
+## Phase 4 continuation — 2026-10-10
+- 当前 Phase 3 worktree 在 pushed branch `feat/phase3-reliability-baselines`，基线 commit `40769dd55b996c41bf3700d43a3fe08564c9cae2`；新建 `feat/live-emodb-inference`，没有切换/改写 main。
+- 官方 Zenodo API 记录 7447302 返回 EmoDB 1.3.0、39,981,818-byte zip、CC-BY-4.0 记录许可、MD5 `9d21362dbc5676ef3ab4745d83ced0db`。下载的 MD5 匹配，ZIP CRC 完整；所有 535 个 WAV 经核验为 16 kHz mono PCM16。原始 archive、展开/窗口音频和 manifest 都在 `.gitignore` 排除的 `data/private/`。
+- 新增官方表格导入器：只选四类 gold labels，映射 N/F/W/T；A/fear、E/disgust、L/boredom 排除。官方 test speakers 12/14/15/16 原样保留；官方 train speakers 03/09 用于 validation，08/10/11/13 用于 train。固定 1.5 s window / 0.5 s stride，共生成 1400 个本地窗口。cross-split speaker/source/content guard 生效。
+- 扩展 manifest 预指定 split 支持；训练 artefact 不保存 test 类别分布，训练预处理、SVC、校准和阈值只使用 train/validation。训练添加 20/10/5/0 dB white-noise augmentation（仅 train），导出 actual 4-class `models/emodb_four_class.json`，size 12,219 bytes / 180 params，NumPy predictor 返回 READY。
+- 新增独立 `EMOTION_ONLY_EXPERIMENTAL` runtime 和 `scripts/live_emotion_only.py`。它复用固定环形缓冲/音质拒识/窗口时间戳，但不接 speaker verifier、不创建 EmotionEvent/TARGET_ACTIVE、不会触发灯光。WAV replay 与本机 microphone 入口共享 1.5 s rolling window、0.5 s 更新、20 ms 采集帧和 2-of-3 accepted-label hysteresis。
+- full 模型依据 validation 结果预选（correctness-F1 .883 vs simple .721；validation accepted-error .209 vs .426）；其后 official held-out test speakers 未用于阈值/模型选择。最终 test 为 569 overlapping windows / 136 utterances / 4 speakers：clean Macro-F1 .570，UAR .613，coverage .953，accepted-error .315；happy recall .049，明显不足以用于可靠决策。
+- 鲁棒性：20 dB white noise coverage .341/Macro-F1 .496；10/5/0 dB 全拒识。其他人 SIR 6/0/-6 dB Macro-F1 为 .402/.192/.111、accepted-error .539/.754/.838。未提供许可音乐、风扇、环境录音或 RIR，所以这些条件如实 NOT_EVALUATED。
+- held-out performance run: full JSON 12,219 bytes/180 params; feature median/p95 9.89/14.48 ms; NumPy inference .074/.121 ms; end-to-end 1.61/14.76 ms; CPU 27.47 s, wall 27.67 s, 0.993 cores, peak RSS 153,378,816 bytes。
+- 实际 WAV replay 经最终模型成功输出四类分数；5秒本机 Realtek mic smoke run 接通、0 dropped frames，但没有捕获 speech 且全部窗被判 SILENCE，因此不能作为麦克风情绪准确率证据。无音频落盘。
+- 最终 fresh 验证：`python -m pytest -q` **107 passed**；`python -m compileall -q src scripts`、`git diff --check`、`emolight-prepare-emodb --help`、`emolight-live-experimental --help`、`emolight-train --help`、`emolight-evaluate --help` 均通过；WAV replay 输出全部四类分数且 mode/identity 明确。`lighting/` 无 diff，data/private WAV/ZIP/CSV 均 ignored。仅待 force-add JSON 模型、提交、push、开 PR。
+
 ## Session: 2026-10-09
 
 ### Current Status

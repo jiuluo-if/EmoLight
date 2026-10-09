@@ -57,3 +57,10 @@
 - simple/full 当前可由同一 evaluator 入口成对评测，固定相同 manifest、seed、噪声清单与条件；结果逐条件给出 `full - simple` 差值。此实现保证测试条件一致，不代表训练出的任一模型已具备有效情绪性能。
 - `EmoLight_emotion_phase2.patch` 在可访问附件与仓库位置中未找到；本分支据用户 Phase 3 规格独立实现等价的数据隔离、特征、校准、部署及评测路径。未声称逐行合入或核验该补丁。
 - 最终软件回归为 96 passed，CLI/package 入口和静态检查通过。数据集、真实背景噪声源、目标身份验证模型与灯带硬件均不可用，因此真实情绪性能、环境泛化、身份验证与硬件行为没有验证。
+
+## Phase 4 official data findings
+- 官方 [audEERING EmoDB dataset documentation](https://audeering.github.io/datasets/datasets/emodb.html) 描述德语表演语音、16 kHz mono PCM、10 位演员，正式 label schemes 包含 neutral/happiness/anger/sadness 及其他类；其当前 2.0 文档为 CC0-1.0，但这不是用户指定的旧 Zenodo artifact。
+- 用户指定的 Zenodo record 7447302 API 当前返回 Berlin EmoDB 1.3.0、`emodb.zip` 39,981,818 bytes、record metadata license `CC-BY-4.0`、MD5 `9d21362dbc5676ef3ab4745d83ced0db`。压缩包内部 `db.yaml` 另写 CC0-1.0；为保守合规，按 Zenodo record metadata 的 CC-BY-4.0 做署名。
+- 本机下载的文件尺寸和 MD5 已逐字节核对通过，zip CRC 检查通过；535 个 WAV 和官方 gold train/test CSV 对应 6 个 train speakers、4 个 test speakers。四分类表格计数 train: angry 72/neutral 52/happy 44/sad 35；test: angry 55/neutral 27/happy 27/sad 27。最终训练/验证/测试必须仅对四类进行派生计数，且按原官方 test speaker 组隔离。
+- 官方 EmoDB 文件名格式为 `<speaker><text><emotion-code><version>.wav`；映射明确为 N neutral、F happiness、W anger、T sadness。zip gold table 同时含 A=fear、E=disgust、L=boredom，绝不把 A 映射为 angry。
+- archive 下载路径位于 `.gitignore` 的 `/data/private/`；任何原始或切片 WAV 均不得提交。

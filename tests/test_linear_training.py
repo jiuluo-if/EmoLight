@@ -114,6 +114,36 @@ def test_training_exports_simple_and_full_numpy_json_models_from_one_split(tmp_p
     assert payload["prediction"]["model_status"] == "READY"
 
 
+def test_training_records_dataset_and_live_window_provenance(tmp_path):
+    manifest = make_speaker_exclusive_manifest(tmp_path)
+    provenance = tmp_path / "dataset_metadata.json"
+    provenance.write_text(json.dumps({
+        "dataset_id": "test-real-corpus",
+        "license": "CC-BY-4.0",
+        "split_speaker_ids": {"train": ["a"], "validation": ["b"], "test": ["c"]},
+        "official_gold_class_counts": {"train": {"happy": 3}, "test": {"happy": 1}},
+        "split_window_class_counts": {"train": {"happy": 3}, "test": {"happy": 1}},
+        "window_s": 1.5,
+        "stride_s": 0.5,
+    }), encoding="utf-8")
+
+    train_linear_models(
+        manifest,
+        tmp_path / "models",
+        dataset_metadata_path=provenance,
+        window_s=1.5,
+        update_interval_s=0.5,
+    )
+
+    artifact = json.loads((tmp_path / "models" / "full.json").read_text(encoding="utf-8"))
+    assert artifact["dataset_provenance"]["dataset_id"] == "test-real-corpus"
+    assert artifact["dataset_provenance"]["license"] == "CC-BY-4.0"
+    assert artifact["window_s"] == 1.5
+    assert artifact["update_interval_s"] == 0.5
+    assert "test" not in artifact["dataset_provenance"]["official_gold_class_counts"]
+    assert "test" not in artifact["dataset_provenance"]["split_window_class_counts"]
+
+
 def test_training_refuses_to_invent_zero_for_an_all_missing_pitch_feature():
     matrix = np.ones((4, 24), dtype=np.float64)
     matrix[:, 0] = np.nan

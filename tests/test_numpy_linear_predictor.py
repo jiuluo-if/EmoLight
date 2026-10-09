@@ -28,6 +28,8 @@ def example_artifact(*, threshold=0.65, calibration_status="CALIBRATED"):
         "sample_rate": 16000,
         "frame_ms": 25.0,
         "hop_ms": 10.0,
+        "window_s": 1.5,
+        "update_interval_s": 0.5,
         "activity_rms_threshold": 0.01,
         "quality_gates": {
             "min_activity_ratio": 0.2,
@@ -106,6 +108,17 @@ def test_json_numpy_model_loads_and_predicts_with_validation_metadata(tmp_path):
     assert result.timestamp_ms == 123
     assert result.scores[Emotion.HAPPY] > result.scores[Emotion.NEUTRAL]
     assert 0.0 <= result.confidence <= 1.0
+
+
+def test_model_rejects_invalid_live_window_metadata(tmp_path):
+    artifact = example_artifact()
+    artifact["update_interval_s"] = 2.0
+    path = tmp_path / "invalid-window.json"
+    path.write_text(json.dumps(artifact), encoding="utf-8")
+
+    predictor = NumpyLinearEmotionPredictor.load(path)
+
+    assert predictor.model_status is ModelStatus.INVALID
 
 
 def test_unconfigured_invalid_and_uncalibrated_artifacts_fail_closed(tmp_path):

@@ -136,3 +136,29 @@ Phase 7: Phase 3 reliability audit
 - [x] 实时 timestamp/迟到结果/有界队列/线程释放/config gates；保持 lighting 实现冻结
 - [x] 全量回归、CLI/package 启动检查与审计报告；独立分支推送，不合并 main
 - **Status:** complete
+
+## Phase 8: Real EmoDB model and live experimental inference
+
+### Baseline and data source
+- [x] Read Phase 4 user specification and verify current feature branch/worktree before edits
+- [x] Create isolated branch `feat/live-emodb-inference` from the pushed Phase 3 branch; do not change main or lighting
+- [x] Verify official audEERING EmoDB metadata: CC0-1.0, German acted speech, 16 kHz mono PCM, 10 speakers, and published gold train/test tables
+- [x] Query the named Zenodo record/API for exact file, checksum, license and availability; acquire data only into ignored local data storage
+- [x] Implement dataset manifest import with correct N/F/W/T labels, speaker ids, path normalization, integrity/audio checks and duplicate rejection
+- [x] Design a speaker-exclusive training/validation split over official train speakers while preserving the official held-out speaker test split
+
+### Model and runtime
+- [x] Test-first implementation for bounded 1.5 s feature windows and training/inference parity
+- [x] Train the existing lightweight feature + LinearSVC pipeline on real four-class EmoDB utterances; reject ambiguous/unmapped classes
+- [x] Calibrate probabilities/rejection threshold using only validation speakers; never tune on official test speakers
+- [x] Export and load actual trained JSON weights; verify metadata and class order; keep data and weights ignored locally
+- [x] Add live `EMOTION_ONLY_EXPERIMENTAL` microphone mode with 16 kHz mono, 1.5 s rolling window, 0.5 s updates, bounded queues, smoothing and timestamp/status output
+- [x] Add WAV replay through the same rolling-window predictor path; retain TARGET_CONDITIONED_LIVE fail-closed without verifier
+- [x] Measure model size/parameter count, CPU feature/inference and end-to-end latency, queue drops, peak RSS; report honest held-out metrics and acted German domain limits
+
+### Final verification and delivery
+- [x] Run relevant tests first, then the complete existing suite and WAV replay checks
+- [x] Confirm no lighting source changes and no dataset/raw audio committed
+- [x] Update README/data/model usage, results report and limitations
+- [ ] Commit with required author and `English: 中文` message, push branch, verify remote SHA, open PR without merging main
+- **Status:** in_progress

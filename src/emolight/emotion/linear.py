@@ -125,6 +125,18 @@ class NumpyLinearEmotionPredictor:
                 raise ValueError(f"model {key} mismatch")
         if artifact.get("frame_ms", 0) <= 0 or artifact.get("hop_ms", 0) <= 0 or artifact["hop_ms"] > artifact["frame_ms"]:
             raise ValueError("invalid model frame/hop metadata")
+        window_s = artifact.get("window_s")
+        update_interval_s = artifact.get("update_interval_s")
+        if (
+            not isinstance(window_s, (int, float))
+            or not np.isfinite(window_s)
+            or window_s <= 0
+            or not isinstance(update_interval_s, (int, float))
+            or not np.isfinite(update_interval_s)
+            or update_interval_s <= 0
+            or update_interval_s > window_s
+        ):
+            raise ValueError("invalid model live window/update metadata")
         if artifact.get("activity_rms_threshold", -1) < 0:
             raise ValueError("invalid model activity threshold")
         if not np.isfinite(artifact["frame_ms"]) or not np.isfinite(artifact["hop_ms"]) or not np.isfinite(artifact["activity_rms_threshold"]):

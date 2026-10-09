@@ -130,3 +130,77 @@ def test_split_metadata_reports_each_subset_class_and_speaker_counts(tmp_path):
             label: sum(record.emotion.value == label for record in subset)
             for label in ("neutral", "happy", "angry", "sad")
         }
+
+
+def test_training_split_metadata_can_withhold_test_labels_until_evaluation(tmp_path):
+    records = make_manifest(tmp_path)
+    split = split_by_speaker_and_recording(records, seed=19)
+
+    metadata = split.to_metadata(include_test_labels=False)
+
+    assert "class_counts" in metadata["subsets"]["train"]
+    assert "class_counts" in metadata["subsets"]["validation"]
+    assert "class_counts" not in metadata["subsets"]["test"]
+    assert metadata["subsets"]["test"]["sample_count"] == len(split.test)
+
+
+def test_preassigned_official_splits_are_preserved_and_speaker_exclusive(tmp_path):
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir()
+    speaker_split = {speaker: "train" for speaker in ("03", "08", "09", "10", "11", "13")}
+    speaker_split["10"] = "validation"
+    speaker_split.update({speaker: "test" for speaker in ("12", "14", "15", "16")})
+    rows = []
+    for speaker, subset in speaker_split.items():
+        for emotion in ("neutral", "happy", "angry", "sad"):
+            name = f"{speaker}-{emotion}.wav"
+            (audio_dir / name).write_bytes(f"{speaker}:{emotion}".encode())
+            rows.append({
+                "path": f"audio/{name}", "emotion": emotion, "speaker_id": speaker,
+                "recording_id": f"{speaker}-{emotion}", "dataset_id": "emodb-1.3.0", "split": subset,
+            })
+    manifest = tmp_path / "emodb_manifest.csv"
+    with manifest.open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=rows[0].keys())
+        writer.writeheader()
+        writer.writerows(rows)
+
+    split = split_by_speaker_and_recording(load_manifest(manifest).records, seed=42)
+
+    actual = {
+        name: {record.speaker_id for record in subset}
+        for name, subset in (("train", split.train), ("validation", split.validation), ("test", split.test))
+    }
+    assert actual == {
+        "train": {"03", "08", "09", "11", "13"},
+        "validation": {"10"},
+        "test": {"12", "14", "15", "16"},
+    }
+    assert split.to_metadata()["method"] == "preassigned speaker-exclusive official dataset split"
+
+
+def test_preassigned_split_rejects_one_speaker_assigned_to_multiple_sets(tmp_path):
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir()
+    rows = []
+    assignments = [("same-speaker", "train", "happy"), ("same-speaker", "test", "happy")]
+    assignments.extend((f"speaker-{index}", "train", "neutral" if index % 2 else "happy") for index in range(1, 5))
+    for index, (speaker, subset, emotion) in enumerate(assignments):
+        path = audio_dir / f"clip-{index}.wav"
+        path.write_bytes(f"clip-{index}".encode())
+        rows.append({
+            "path": f"audio/{path.name}", "emotion": emotion, "speaker_id": speaker,
+            "recording_id": f"clip-{index}", "dataset_id": "emodb-1.3.0", "split": subset,
+        })
+    manifest = tmp_path / "conflicting_manifest.csv"
+    with manifest.open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=rows[0].keys())
+        writer.writeheader()
+        writer.writerows(rows)
+
+    try:
+        split_by_speaker_and_recording(load_manifest(manifest).records)
+    except ValueError as error:
+        assert "connected source group has conflicting preassigned splits" in str(error)
+    else:
+        raise AssertionError("expected conflicting speaker split assignment to fail")

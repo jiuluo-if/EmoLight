@@ -21,6 +21,7 @@ class ManifestRecord:
     file_sha256: str = ""
     source_recording_id: str = ""
     augmentation_group_id: str = ""
+    preassigned_split: str = ""
 
 
 @dataclass(frozen=True)
@@ -85,6 +86,9 @@ def load_manifest(
             dataset_id = (row.get("dataset_id") or "custom").strip() or "custom"
             source_recording_id = (row.get("source_recording_id") or "").strip() or recording_id
             augmentation_group_id = (row.get("augmentation_group_id") or "").strip()
+            preassigned_split = (row.get("split") or "").strip().casefold()
+            if "split" in reader.fieldnames and preassigned_split not in ("train", "validation", "test"):
+                raise ManifestError(f"row {row_number}: split must be train, validation, or test")
             if not raw_path:
                 raise ManifestError(f"row {row_number}: path is empty")
             if not speaker_id or not recording_id:
@@ -121,6 +125,7 @@ def load_manifest(
                 file_sha256=digest,
                 source_recording_id=source_recording_id,
                 augmentation_group_id=augmentation_group_id,
+                preassigned_split=preassigned_split,
             ))
     return ManifestLoadResult(
         records=tuple(records),
