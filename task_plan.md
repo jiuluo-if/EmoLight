@@ -4,7 +4,7 @@
 在现有 EmoLight PC MVP 上增量建立可真实评测的非语义声学情绪分类与严格目标身份门控，同时保持默认拒识和原 CLI/演示兼容。
 
 ## Next Step
-实现 32 维 `prosody-v1` 固定特征向量及合成音频测试，保留 AcousticFeatures 兼容。
+为本地数据 manifest 和 speaker/recording 连通分组划分编写泄漏测试，再实现 dataset adapters。
 
 ## Current Phase
 Phase 6
@@ -75,9 +75,13 @@ Phase 6
 - **Status:** complete
 
 ### Phase 6.2: Prosody feature contract
-- [ ] 新增有 schema/version/frame metadata 的固定 32 维因果韵律向量
-- [ ] 添加正弦、静音、噪声、异常浮点、削波和帧边界测试
-- [ ] AcousticFeatures 旧 API 保持兼容，质量/活动/削波分开
+- [x] 新增有 schema/version/frame metadata 的固定 32 维因果韵律向量
+- [x] 添加正弦、静音、噪声、异常浮点、削波和帧边界测试
+- [x] AcousticFeatures 旧 API 保持兼容，质量/活动/削波/SNR 估计分开
+- [x] runtime 以有效活动比例和最长连续帧数拒绝孤立瞬态
+- [x] 音频质量状态区分有效底噪估计、低质量和未知；无噪声参考不以 RMS 代替质量
+- [x] 全量测试 38 passed
+- **Status:** complete
 
 ### Phase 6.3: Trainable CPU baseline
 - [ ] 添加 manifest dataset adapter 和 speaker/recording-connected split
@@ -92,7 +96,7 @@ Phase 6
 - [ ] 没有真实标注数据时，标记真实训练/性能未完成，不伪造指标
 
 ### Phase 6.5: Quality, runtime, and delivery
-- [ ] 最小活动比例及连续帧门控；同一窗口快照共享质量和预测
+- [x] 最小活动比例及连续帧门控；同一窗口快照共享质量和预测
 - [ ] 统一音频采样率/窗口/刷新配置；结果队列 latest-only 且有界
 - [ ] 补充 .gitignore、README、移除文档中的本地个人路径
 - [ ] 全量测试、代码审查、提交并推送任务分支

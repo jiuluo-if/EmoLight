@@ -11,8 +11,9 @@
 - 当前工作位于 `feat/real-emotion-mvp` 隔离 worktree，基于 main 提交 `5dce973`。
 - 新阶段开始时 main 工作区清洁，原测试基线 22 passed；身份门控审计问题确实仍存在。
 - `data/` 只有许可说明，没有可用于真实性能评估的标注数据；`models/` 没有模型权重。
-- GitHub CLI 当前 keyring token 无效；新 `.gitignore` 提交已在本地 main，但 push 连接中断，需后续核对并推送。
+- GitHub CLI keyring token 状态无效，但 Git Credential Manager 成功推送任务分支 `124a340`；远端只读读取偶有连接中断，需继续核对 SHA。
 - 身份门控修复后，全量测试为 30 passed；假 happy 预测器仅在 verifier 可信返回 TARGET_ACTIVE 后才会被调用，EmotionPrediction 不能编码 speaker/VAD 状态。
+- `prosody-v1` 特征和独立音频质量测试已通过；持续高响度噪声但没有非活动噪声参考会留在 UNCERTAIN，不能由 RMS 单独给高质量。
 
 ## Technical Decisions
 | Decision | Rationale |
@@ -28,6 +29,8 @@
 | 新增独立 `EmotionPrediction`；runtime 只在 SpeakerVerifier 可信后包装为 TARGET_ACTIVE | 分类分数不能代替身份验证；旧 `UnconfiguredEmotionPredictor` 兼容层可保留 |
 | 使用有 schema/采样元数据的固定 32 维 prosody-v1 向量 | 训练和推理共享特征实现，并可拒绝不匹配模型 |
 | 训练产物记录类别顺序、schema、采样参数、划分摘要和版本 | 防止运行时加载含义不一致或数据泄漏模型 |
+| 音频质量状态由活动帧、连续活动、削波和有静音噪声参考时的前景/底噪能量差共同判断 | 没有可用底噪参考时标记 UNCERTAIN；`audio_quality` 不再随 RMS 增大而变成高质量 |
+| 运行时由单一 `AcousticFeatures` 窗口快照提供活动比例、连续帧及质量门控 | 避免并行 VAD 与质量计算因窗口错位而产生不一致判断 |
 
 ## Issues Encountered
 | Issue | Resolution |

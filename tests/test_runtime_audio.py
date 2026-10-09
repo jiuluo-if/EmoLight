@@ -16,10 +16,11 @@ def test_ring_buffer_keeps_only_latest_samples_in_chronological_order():
 
 def test_realtime_features_use_bounded_window_and_emit_not_configured():
     runtime = RealtimeFeatureRuntime(sample_rate=1000, window_s=1, update_interval_s=0.5)
+    background = np.full(250, 0.001, dtype=np.float32)
     chunk = np.full(250, 0.1, dtype=np.float32)
 
-    assert runtime.feed(chunk, timestamp_ms=250) is None
-    assert runtime.feed(chunk, timestamp_ms=500) is None
+    assert runtime.feed(background, timestamp_ms=250) is None
+    assert runtime.feed(background, timestamp_ms=500) is None
     assert runtime.feed(chunk, timestamp_ms=750) is None
     first = runtime.feed(chunk, timestamp_ms=1000)
     assert first is not None and first.status is SystemStatus.NOT_CONFIGURED

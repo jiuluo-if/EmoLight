@@ -32,10 +32,10 @@
 
 **Files:** `src/emolight/features/prosody.py`, `src/emolight/features/acoustic.py`, `src/emolight/audio/vad.py`, `src/emolight/config.py`, `tests/test_prosody.py`, `tests/test_audio_quality.py`
 
-- [ ] 合成正弦和频率阶跃验证 F0/变化率；静音验证 F0 缺失与 voiced=0。
-- [ ] 噪声、削波、NaN/Inf、不同采样率和短帧验证数值稳定性和 schema 元数据。
-- [ ] 实现固定 32 维窗口向量及版本/采样率/帧长/帧移；扩展旧 `AcousticFeatures` 并保持五参数构造兼容。
-- [ ] runtime 使用最小活动比例和连续帧条件，不因一个瞬态进入 speaker/emotion 阶段。
+- [x] 合成正弦和频率阶跃验证 F0/变化率；静音验证 F0 缺失与 voiced=0。
+- [x] 噪声、削波、NaN/Inf、不同采样率和短帧验证数值稳定性和 schema 元数据。
+- [x] 实现固定 32 维窗口向量及版本/采样率/帧长/帧移；扩展旧 `AcousticFeatures` 并保持五参数构造兼容。
+- [x] runtime 使用最小活动比例和连续帧条件，不因一个瞬态进入 speaker/emotion 阶段。
 
 ### Task 3: Dataset manifest and leakage-resistant splitting
 

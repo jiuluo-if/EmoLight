@@ -36,5 +36,9 @@
 - 当前 worktree：`.worktrees/real-emotion-mvp`，branch `feat/real-emotion-mvp`，基于本地 main `5dce973`。
 - 已复核：runtime 没有身份 verifier；任意单帧活动即可调用 predictor；完整 EmotionEvent 可由 predictor 返回。新阶段初始测试基线 22 passed。
 - 数据检查：没有音频 manifest 或模型权重。真实性能训练须待用户提供许可合规标注语料。
-- GitHub：`5dce973` 尚未推送；HTTPS 连接中止，`gh auth status` 显示 keyring token 无效。先继续本地实现，交付时再安全核验推送。
+- GitHub：任务分支 `124a340` 已成功推送；Git CLI keyring 检查仍报 token 无效，但 Git Credential Manager 完成 push。远端只读 `ls-remote` 最近一次连接中断，后续再核 SHA。
 - Phase 6.1 completed: EmotionPrediction no longer contains identity status; runtime now owns TARGET_ACTIVE event construction after activity, quality and speaker gates. Compatibility tests pass; full suite is 30 passed.
+- Phase 6.2 implemented `prosody-v1` fixed 32-D causal window features with F0/autocorrelation, energy, voiced/pause/activity, deltas, ZCR and HNR metadata. AcousticFeatures retains its original five positional fields and now separates RMS, clipping, activity ratio, VAD continuity and an SNR estimate; no inactive noise floor means quality is UNCERTAIN.
+- Synthetic feature and quality tests cover tone, pitch step, silence, noise, nonfinite samples, short frames, clipping and SNR contrast.
+- `RealtimeFeatureRuntime` now uses the activity ratio/continuity and quality status from its single shared audio snapshot instead of running a second independent VAD pass.
+- Phase 6.2 full suite after feature/quality changes: 38 passed.

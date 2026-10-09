@@ -37,7 +37,10 @@ def runtime_for(verifier=None, predictor=None):
 
 
 def active_window():
-    return np.full(1000, 0.1, dtype=np.float32)
+    samples = np.full(1000, 0.001, dtype=np.float32)
+    times = np.arange(500, dtype=np.float32) / 1000
+    samples[500:] += 0.1 * np.sin(2 * np.pi * 120 * times)
+    return samples
 
 
 def test_unconfigured_identity_blocks_high_confidence_emotion_predictor():

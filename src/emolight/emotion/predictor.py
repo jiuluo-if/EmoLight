@@ -3,7 +3,7 @@ from enum import Enum
 from typing import Mapping, Protocol
 
 from emolight.events import Emotion, EmotionEvent, EventSource, SystemStatus
-from emolight.features.acoustic import AcousticFeatures
+from emolight.features.acoustic import AcousticFeatures, AudioQualityStatus
 
 
 class ModelStatus(str, Enum):
@@ -72,7 +72,7 @@ class UnconfiguredEmotionPredictor:
     """Fail-closed predictor used until a trained and verified model is installed."""
 
     def predict(self, features: AcousticFeatures, timestamp_ms: int = 0) -> EmotionPrediction:
-        rejection = SystemStatus.LOW_QUALITY if features.audio_quality < 0.5 else None
+        rejection = SystemStatus.LOW_QUALITY if features.quality_status is AudioQualityStatus.LOW_QUALITY else None
         return EmotionPrediction(
             emotion=None,
             model_status=ModelStatus.NOT_CONFIGURED,

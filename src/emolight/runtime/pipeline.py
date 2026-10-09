@@ -2,10 +2,9 @@ import numpy as np
 
 from emolight.audio.ring_buffer import AudioRingBuffer
 from emolight.audio.wav import AudioBuffer
-from emolight.audio.vad import ActivityFrame, EnergyVAD
 from emolight.emotion.predictor import EmotionPrediction, EmotionPredictor, ModelStatus, UnconfiguredEmotionPredictor
 from emolight.events import EmotionEvent, EventSource, SystemStatus
-from emolight.features.acoustic import AcousticFeatures, extract_features
+from emolight.features.acoustic import AcousticFeatures, AudioQualityStatus, extract_features
 from emolight.speaker.verifier import SpeakerVerifier, UnconfiguredSpeakerVerifier
 
 
@@ -41,8 +40,6 @@ class RealtimeFeatureRuntime:
         self.min_audio_quality = min_audio_quality
         self.min_speaker_confidence = min_speaker_confidence
         self.latest_features: AcousticFeatures | None = None
-        self.latest_vad_frames: list[ActivityFrame] = []
-        self.vad = EnergyVAD()
         self._last_update_ms: int | None = None
 
     def feed(self, samples: np.ndarray, timestamp_ms: int) -> EmotionEvent | None:
@@ -54,13 +51,16 @@ class RealtimeFeatureRuntime:
         self._last_update_ms = timestamp_ms
         audio = AudioBuffer(self.buffer.snapshot(), self.sample_rate)
         self.latest_features = extract_features(audio)
-        self.latest_vad_frames = self.vad.process(audio)
-        active = [frame.status is SystemStatus.UNCERTAIN for frame in self.latest_vad_frames]
-        activity_ratio = sum(active) / len(active) if active else 0.0
-        longest_active_run = max((count for value, count in _group_runs(active) if value), default=0)
-        if activity_ratio == 0.0:
+        if self.latest_features.active_frame_count == 0:
             return EmotionEvent.unknown(SystemStatus.SILENCE, timestamp_ms=timestamp_ms)
-        if activity_ratio < self.min_activity_ratio or longest_active_run < self.min_contiguous_active_frames:
+        if (
+            self.latest_features.activity_ratio < self.min_activity_ratio
+            or self.latest_features.longest_active_run < self.min_contiguous_active_frames
+        ):
+            return EmotionEvent.unknown(SystemStatus.UNCERTAIN, timestamp_ms=timestamp_ms)
+        if self.latest_features.quality_status is AudioQualityStatus.LOW_QUALITY:
+            return EmotionEvent.unknown(SystemStatus.LOW_QUALITY, timestamp_ms=timestamp_ms)
+        if self.latest_features.quality_status is not AudioQualityStatus.ACCEPTABLE:
             return EmotionEvent.unknown(SystemStatus.UNCERTAIN, timestamp_ms=timestamp_ms)
         if self.latest_features.audio_quality < self.min_audio_quality:
             return EmotionEvent.unknown(SystemStatus.LOW_QUALITY, timestamp_ms=timestamp_ms)
@@ -116,18 +116,3 @@ class RealtimeFeatureRuntime:
             rejection_status=SystemStatus.UNCERTAIN,
             timestamp_ms=timestamp_ms,
         )
-
-
-def _group_runs(values: list[bool]):
-    if not values:
-        return
-    current = values[0]
-    count = 0
-    for value in values:
-        if value == current:
-            count += 1
-        else:
-            yield current, count
-            current = value
-            count = 1
-    yield current, count
