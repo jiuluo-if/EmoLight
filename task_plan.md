@@ -101,13 +101,14 @@ Phase 6
 - [x] 最小活动比例及连续帧门控；同一窗口快照共享质量和预测
 - [x] 统一音频采样率/窗口/刷新配置；结果队列 latest-only 且有界
 - [x] 补充 .gitignore、README、移除文档中的本地个人路径
-- [ ] 选择性回归测试、代码审查、提交并推送任务分支
-- **Status:** in_progress
+- [x] 选择性回归测试、代码审查、提交并推送任务分支
+- **Status:** complete
 
 ### Phase 6 verification notes
 - [x] 基础回归与新增功能相关测试：71 passed（选择性测试，未运行全量测试套件）
 - [x] `compileall` 与 `git diff --check`
 - [x] `emolight --no-gui`、`emolight-train --help`、`emolight-evaluate --help`
 - [x] 评审发现的特征索引、quality 域、时序阈值和未知类别指标问题已修复并有测试
+- [x] 配置 NaN/Infinity 校验与回归测试
 - [x] 代码复查与发现问题修复完成
-- [ ] 提交、推送与远端 SHA 核对
+- [x] 提交、推送与远端 SHA 核对；当前实现提交 `ef93059365d9daac549cd065be17e7cb11a3b7a5`
