@@ -1,0 +1,24 @@
+{
+  "audio": {
+    "sample_rate_hz": 16000,
+    "channels": 1,
+    "frame_ms": 25,
+    "hop_ms": 10,
+    "emotion_window_s": 1.5,
+    "update_interval_s": 0.5
+  },
+  "lighting": {
+    "max_brightness": 0.4,
+    "night_max_brightness": 0.12,
+    "transition_ms": 3000,
+    "allow_flicker": false,
+    "neutral_rgb": [244, 231, 210],
+    "happy_rgb": [255, 224, 158],
+    "angry_rgb": [178, 205, 194],
+    "sad_rgb": [255, 197, 120]
+  },
+  "models": {
+    "emotion": null,
+    "speaker": null
+  }
+}
