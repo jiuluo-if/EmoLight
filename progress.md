@@ -27,7 +27,8 @@
 - 鲁棒性：20 dB white noise coverage .341/Macro-F1 .496；10/5/0 dB 全拒识。其他人 SIR 6/0/-6 dB Macro-F1 为 .402/.192/.111、accepted-error .539/.754/.838。未提供许可音乐、风扇、环境录音或 RIR，所以这些条件如实 NOT_EVALUATED。
 - held-out performance run: full JSON 12,219 bytes/180 params; feature median/p95 9.89/14.48 ms; NumPy inference .074/.121 ms; end-to-end 1.61/14.76 ms; CPU 27.47 s, wall 27.67 s, 0.993 cores, peak RSS 153,378,816 bytes。
 - 实际 WAV replay 经最终模型成功输出四类分数；5秒本机 Realtek mic smoke run 接通、0 dropped frames，但没有捕获 speech 且全部窗被判 SILENCE，因此不能作为麦克风情绪准确率证据。无音频落盘。
-- 最终 fresh 验证：`python -m pytest -q` **107 passed**；`python -m compileall -q src scripts`、`git diff --check`、`emolight-prepare-emodb --help`、`emolight-live-experimental --help`、`emolight-train --help`、`emolight-evaluate --help` 均通过；WAV replay 输出全部四类分数且 mode/identity 明确。`lighting/` 无 diff，data/private WAV/ZIP/CSV 均 ignored。仅待 force-add JSON 模型、提交、push、开 PR。
+- 最终 fresh 验证：`python -m pytest -q` **107 passed**；`python -m compileall -q src scripts`、`git diff --check`、`emolight-prepare-emodb --help`、`emolight-live-experimental --help`、`emolight-train --help`、`emolight-evaluate --help` 均通过；WAV replay 输出全部四类分数且 mode/identity 明确。`lighting/` 无 diff，data/private WAV/ZIP/CSV 均 ignored。
+- 交付：commit `fa31f49e628dcce3d58f3956791b92c8d08b18b1`，作者邮箱按要求设置；分支 `feat/live-emodb-inference` 已推送且远端 SHA 一致。GitHub connector 创建 PR 时返回 403 `Resource not accessible by integration`；已用本机已授权 `gh` CLI 打开 PR 1，状态 OPEN、base main、未合并：https://github.com/jiuluo-if/EmoLight/pull/1。
 
 ## Session: 2026-10-09
 

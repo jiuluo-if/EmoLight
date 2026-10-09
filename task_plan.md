@@ -160,5 +160,5 @@ Phase 7: Phase 3 reliability audit
 - [x] Run relevant tests first, then the complete existing suite and WAV replay checks
 - [x] Confirm no lighting source changes and no dataset/raw audio committed
 - [x] Update README/data/model usage, results report and limitations
-- [ ] Commit with required author and `English: 中文` message, push branch, verify remote SHA, open PR without merging main
-- **Status:** in_progress
+- [x] Commit with required author and `English: 中文` message, push branch, verify remote SHA, open PR without merging main
+- **Status:** complete
