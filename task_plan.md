@@ -4,7 +4,7 @@
 建立可离线启动、明确区分真实音频状态与模拟演示的情绪感知灯光 PC MVP。
 
 ## Next Step
-使用指定邮箱提交已验证的 MVP，并推送至新建的 GitHub 私有仓库后核对远端 SHA。
+首轮 PC MVP 已交付；真实声纹/情绪模型、串口和实体灯带属于后续阶段。
 
 ## Current Phase
 Phase 4
@@ -35,10 +35,15 @@ Phase 4
 - **Status:** complete
 
 ### Phase 5: Delivery
-- [ ] 使用约定邮箱与“English: 中文内容”提交
-- [ ] 推送 GitHub 并核对远端提交
-- [ ] 总结实现范围、证据和后续阶段
-- **Status:** in_progress
+- [x] 使用约定邮箱与“English: 中文内容”提交
+- [x] 推送 GitHub 并核对远端提交
+- [x] 总结实现范围、证据和后续阶段
+- **Status:** complete
+
+## Delivery
+- GitHub: `https://github.com/jiuluo-if/EmoLight` (private)
+- Implementation commit pushed: `187e45bd29772bad307e168efce92de67fdae3a8`
+- Email: `2966684515@qq.com`
 
 ## Decisions Made
 | Decision | Rationale |

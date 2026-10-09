@@ -11,6 +11,7 @@
 - 工作区 `F:\codex\emotion` 起初是空目录；现已建立独立 EmoLight Python 项目和 `main` 初始分支。
 - 已有相关 EmotiScreen 记忆属于另一目录和另一产品流程，不适合作为此 EmoLight 项目的代码或能力证明。
 - Git 邮箱已配置为 `2966684515@qq.com`；GitHub CLI 登录账号为 `jiuluo-if`；没有同名 EmoLight repository。
+- 已创建私有 `jiuluo-if/EmoLight` 并把实现提交推送到 `main`；推前后 SHA 已核对一致。
 
 ## Technical Decisions
 | Decision | Rationale |
