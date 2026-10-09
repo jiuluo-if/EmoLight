@@ -11,6 +11,7 @@ class ModelStatus(str, Enum):
     READY = "READY"
     NOT_CONFIGURED = "NOT_CONFIGURED"
     INVALID = "INVALID"
+    UNCALIBRATED = "UNCALIBRATED"
     ERROR = "ERROR"
 
 
@@ -25,6 +26,10 @@ class EmotionPrediction:
     rejection_status: SystemStatus | None = None
     timestamp_ms: int = 0
     audio_quality: float = 0.0
+    model_version: str | None = None
+    calibration_status: str = "UNCALIBRATED"
+    decision_threshold: float | None = None
+    validation_record_id: str | None = None
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.confidence <= 1.0:
@@ -35,6 +40,8 @@ class EmotionPrediction:
             raise ValueError("timestamp_ms must be non-negative")
         if not 0.0 <= self.audio_quality <= 1.0:
             raise ValueError("audio_quality must be between 0 and 1")
+        if self.decision_threshold is not None and not 0.0 <= self.decision_threshold <= 1.0:
+            raise ValueError("decision_threshold must be between 0 and 1")
         if self.rejection_status is not None and self.rejection_status not in (
             SystemStatus.LOW_QUALITY,
             SystemStatus.UNCERTAIN,

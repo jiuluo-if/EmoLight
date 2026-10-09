@@ -134,7 +134,14 @@ class RealtimeFeatureRuntime:
         except Exception:
             return finish(EmotionEvent.unknown(SystemStatus.UNCERTAIN, timestamp_ms=timestamp_ms))
         prediction = self._normalize_prediction(prediction, timestamp_ms)
-        if prediction.model_status is not ModelStatus.READY or prediction.emotion is None:
+        if (
+            prediction.model_status is not ModelStatus.READY
+            or prediction.emotion is None
+            or prediction.calibration_status != "CALIBRATED"
+            or not prediction.model_version
+            or not prediction.validation_record_id
+            or prediction.decision_threshold is None
+        ):
             return finish(EmotionEvent.unknown(prediction.status, timestamp_ms=timestamp_ms))
         return finish(EmotionEvent(
             emotion=prediction.emotion,
@@ -144,6 +151,10 @@ class RealtimeFeatureRuntime:
             audio_quality=self.latest_features.audio_quality,
             timestamp_ms=timestamp_ms,
             source=EventSource.LIVE,
+            model_version=prediction.model_version,
+            calibration_status=prediction.calibration_status,
+            decision_threshold=prediction.decision_threshold,
+            validation_record_id=prediction.validation_record_id,
         ))
 
     @staticmethod

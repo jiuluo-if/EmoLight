@@ -49,7 +49,7 @@ def test_app_config_unifies_audio_model_and_lighting_values(tmp_path):
             "min_activity_ratio": 0.3,
         },
         "lighting": {"max_brightness": 0.2},
-        "models": {"emotion": "models/local.joblib", "speaker": None},
+        "models": {"emotion": "models/full.json", "speaker": None},
     }), encoding="utf-8")
 
     config = load_app_config(path)
@@ -59,7 +59,7 @@ def test_app_config_unifies_audio_model_and_lighting_values(tmp_path):
     assert config.audio.capture_frame_ms == 20
     assert config.audio.window_s == 2.0
     assert config.lighting.max_brightness == 0.2
-    assert config.emotion_model_path == str((tmp_path / "models" / "local.joblib").resolve())
+    assert config.emotion_model_path == str((tmp_path / "models" / "full.json").resolve())
 
 
 def test_app_config_rejects_audio_parameters_the_runtime_cannot_use(tmp_path):

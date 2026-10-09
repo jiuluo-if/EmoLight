@@ -45,3 +45,15 @@
 
 ## Resources
 - 规格来源：本轮用户提供的 EmoLight 下一阶段目标；仓库文档不保留个人本地附件路径。
+
+## Phase 3 Audit Findings
+- `origin/main`=`64897c85ecd07a2ab1b1ac1504e59412eec10da6`，匹配用户给定 HEAD。新分支 `feat/phase3-reliability-baselines` 从已推送实现分支切出；共同祖先包含该 main SHA，不会合并 main。
+- 检索附件及 `F:\codex` 未找到 `EmoLight_emotion_phase2.patch`。当前没有 `src/emolight/emotion/linear.py`、`scripts/train_linear.py` 或 `scripts/predict_linear.py`；现有为 32 维 prosody + scikit-learn joblib，与要求的 24 维 NumPy 部署接口不等价。
+- 新 24 维 extractor 现定义：帧覆盖不足 80%或含 NaN/Inf 即无效；`valid_frame_fraction` 汇总有效分析帧；能量 `active_fraction`、周期性 `mean_periodicity`、F0 `f0_valid_fraction` 明确分开。未检出可靠 F0/HNR 的列保持 NaN，simple/full 两路径均共享训练数据拟合的 imputation。已有程序测试覆盖静音、纯音、低幅男女音域、白噪声和 20/10/5/0 dB 合成噪声的数值行为；非语义特征仍不等同于已确认语音或目标人。
+- new `LinearSVC` trainer uses training-only imputation/scaling, one-vs-rest Platt sigmoid on independent validation, Brier/ECE and correctness-F1 rejection threshold; JSON/NumPy inference is integrated in CLI/GUI/runtime, and the joblib path was removed.
+- 分组实现已增加 dataset 内 speaker/recording/source-recording/augmentation 连通组、规范化绝对路径、非空 WAV SHA-256；每 split 输出 sample/class/speaker/group/dataset counts 与 missing class 标签。回归测试覆盖同一路径伪造不同 speaker/recording ID、跨路径复制内容和增强组。
+- simple/full 同一 split 训练并可独立 held-out evaluation；评估支持 clean、20/10/5/0dB white noise、manifest-based music/fan/environment、RIR reverb、independent other-speaker overlap，并报告 per-stage latency/CPU/RSS/size/params/coverage/error。没有真实语料/噪声源文件时，实际指标仍未评估。
+- 仓库没有真实标注音频、声纹注册样本或模型权重；合成测试只能证实程序行为，不能作为情绪性能或环境鲁棒证据。
+- simple/full 当前可由同一 evaluator 入口成对评测，固定相同 manifest、seed、噪声清单与条件；结果逐条件给出 `full - simple` 差值。此实现保证测试条件一致，不代表训练出的任一模型已具备有效情绪性能。
+- `EmoLight_emotion_phase2.patch` 在可访问附件与仓库位置中未找到；本分支据用户 Phase 3 规格独立实现等价的数据隔离、特征、校准、部署及评测路径。未声称逐行合入或核验该补丁。
+- 最终软件回归为 96 passed，CLI/package 入口和静态检查通过。数据集、真实背景噪声源、目标身份验证模型与灯带硬件均不可用，因此真实情绪性能、环境泛化、身份验证与硬件行为没有验证。

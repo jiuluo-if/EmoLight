@@ -4,10 +4,10 @@
 在现有 EmoLight PC MVP 上增量建立可真实评测的非语义声学情绪分类与严格目标身份门控，同时保持默认拒识和原 CLI/演示兼容。
 
 ## Next Step
-完成代码审查与交付验证，检查远端 SHA 后提交并推送当前任务分支。
+找到/收到 Phase 2 补丁并检查兼容边界；若无法取得，按 Phase 3 规格实现 24 维纯 NumPy 模型契约。
 
 ## Current Phase
-Phase 6
+Phase 7: Phase 3 reliability audit
 
 ## Phases
 
@@ -61,6 +61,7 @@ Phase 6
 | console script 曾因缺少 `main()` 启动失败 | 新增入口测试和 wrapper，安装后的命令已通过 |
 | 本阶段多文件补丁因表格上下文不一致未应用 | 检查文件后拆分编辑，没有部分写入 |
 | GitHub HTTPS 推送被连接中断且 CLI keyring token 无效 | 本地提交保留；继续核对认证通道和远端状态 |
+| Phase 3 计划补丁尝试针对 main 旧 task_plan 文本匹配失败 | 重新读取当前 worktree 的 Phase 6 计划，改为增量追加 Phase 7；没有写入部分内容 |
 
 ## Phase 6: Real Emotion MVP
 
@@ -112,3 +113,26 @@ Phase 6
 - [x] 配置 NaN/Infinity 校验与回归测试
 - [x] 代码复查与发现问题修复完成
 - [x] 提交、推送与远端 SHA 核对；当前实现提交 `ef93059365d9daac549cd065be17e7cb11a3b7a5`
+
+## Phase 7: Phase 3 reliability audit
+
+### Audit baseline
+- [x] 读取 Phase 3 规格、README、Git 状态和远端 main
+- [x] 确认 `origin/main`=`64897c85ecd07a2ab1b1ac1504e59412eec10da6`
+- [x] 确认工作区干净并切到新分支 `feat/phase3-reliability-baselines`
+- [x] 核验当前代码是 32 维 + sklearn joblib，而非点名的 24 维纯 NumPy linear/script 补丁
+- [x] 检索未找到 `EmoLight_emotion_phase2.patch`；按明确规格独立实现并记录此限制
+- **Status:** in_progress
+
+### Implementation
+- [x] 按绝对路径、内容哈希、dataset-scoped speaker/recording 和 augmentation lineage 防跨 split
+- [x] 输出 train/validation/test 的样本数、类别分布和 speaker 数；不完整类别显式警告
+- [x] 定义有效帧/F0 可信度/periodicity/voice 的独立语义并集成 24-D extractor 到 prosody/CLI/runtime
+- [x] 在 training split 拟合 scaler/imputer；validation split 校准分数和选择拒识阈值；test split 仅最终评测
+- [x] 同一分组切分训练 simple 与 full 非语义特征线性模型
+- [x] 增加背景音乐、风扇、混响和重叠人声独立评估与 coverage/reject/error 指标；无源明确 NOT_EVALUATED
+- [x] 导出 JSON NumPy 纯推理器，报告模型参数/文件大小、特征/VAD/总延迟和 CPU/RSS
+- [x] 集成 `emotion-prosody-24-v1` 与 NumPy predictor 到 CLI/GUI/runtime 并移除 joblib 主链路
+- [x] 实时 timestamp/迟到结果/有界队列/线程释放/config gates；保持 lighting 实现冻结
+- [x] 全量回归、CLI/package 启动检查与审计报告；独立分支推送，不合并 main
+- **Status:** complete

@@ -13,7 +13,15 @@ class AlwaysHappyPredictor:
 
     def predict(self, features, timestamp_ms=0):
         self.calls += 1
-        return EmotionPrediction(Emotion.HAPPY, 1.0, model_status=ModelStatus.READY)
+        return EmotionPrediction(
+            Emotion.HAPPY,
+            1.0,
+            model_status=ModelStatus.READY,
+            model_version="test-linear-v1",
+            calibration_status="CALIBRATED",
+            decision_threshold=0.6,
+            validation_record_id="validation-digest",
+        )
 
 
 class FixedSpeakerVerifier:
@@ -89,7 +97,23 @@ def test_only_verified_target_identity_can_create_target_emotion_event():
     assert event.emotion is Emotion.HAPPY
     assert event.emotion_confidence == 1.0
     assert event.speaker_confidence == 0.96
+    assert event.model_version == "test-linear-v1"
+    assert event.validation_record_id == "validation-digest"
+    assert event.decision_threshold == 0.6
     assert predictor.calls == 1
+
+
+def test_uncalibrated_high_confidence_model_cannot_create_target_event():
+    class UncalibratedPredictor:
+        def predict(self, features, timestamp_ms=0):
+            return EmotionPrediction(Emotion.HAPPY, 0.999, model_status=ModelStatus.READY)
+
+    verifier = FixedSpeakerVerifier(SystemStatus.TARGET_ACTIVE, confidence=0.99)
+    event = runtime_for(verifier, UncalibratedPredictor()).feed(active_window(), timestamp_ms=1000)
+
+    assert event is not None
+    assert event.status is SystemStatus.UNCERTAIN
+    assert event.emotion is None
 
 
 def test_low_speaker_confidence_is_rejected_before_emotion_prediction():

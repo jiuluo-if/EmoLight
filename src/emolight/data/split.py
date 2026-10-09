@@ -1,4 +1,6 @@
 from dataclasses import dataclass
+import os
+from pathlib import Path
 
 import numpy as np
 from sklearn.model_selection import StratifiedGroupKFold
@@ -19,6 +21,14 @@ class DatasetSplit:
     test_group_ids: tuple[int, ...]
 
     def to_metadata(self) -> dict:
+        subsets = {
+            name: _subset_summary(records, self.group_counts[index])
+            for index, (name, records) in enumerate((
+                ("train", self.train),
+                ("validation", self.validation),
+                ("test", self.test),
+            ))
+        }
         return {
             "method": self.method,
             "seed": self.seed,
@@ -32,20 +42,21 @@ class DatasetSplit:
                 "validation": self.group_counts[1],
                 "test": self.group_counts[2],
             },
+            "subsets": subsets,
         }
 
 
 class _UnionFind:
     def __init__(self) -> None:
-        self.parent: dict[tuple[str, str, str], tuple[str, str, str]] = {}
+        self.parent: dict[tuple[str, ...], tuple[str, ...]] = {}
 
-    def find(self, item: tuple[str, str, str]) -> tuple[str, str, str]:
+    def find(self, item: tuple[str, ...]) -> tuple[str, ...]:
         self.parent.setdefault(item, item)
         if self.parent[item] != item:
             self.parent[item] = self.find(self.parent[item])
         return self.parent[item]
 
-    def union(self, left: tuple[str, str, str], right: tuple[str, str, str]) -> None:
+    def union(self, left: tuple[str, ...], right: tuple[str, ...]) -> None:
         left_root, right_root = self.find(left), self.find(right)
         if left_root != right_root:
             if left_root < right_root:
@@ -60,7 +71,18 @@ def _connected_groups(records: tuple[ManifestRecord, ...]) -> np.ndarray:
     for record in records:
         speaker = ("speaker", record.dataset_id, record.speaker_id)
         recording = ("recording", record.dataset_id, record.recording_id)
-        union.union(speaker, recording)
+        source_recording_id = record.source_recording_id or record.recording_id
+        source_recording = ("source_recording", record.dataset_id, source_recording_id)
+        row_keys = [speaker, recording, source_recording]
+        if record.augmentation_group_id:
+            row_keys.append(("augmentation", record.dataset_id, record.augmentation_group_id))
+        if record.path:
+            normalized_path = os.path.normcase(str(Path(record.path).resolve()))
+            row_keys.append(("path", normalized_path))
+        if record.file_sha256:
+            row_keys.append(("sha256", record.file_sha256))
+        for key in row_keys[1:]:
+            union.union(row_keys[0], key)
         keys.append(speaker)
     roots = [union.find(key) for key in keys]
     root_ids = {root: index for index, root in enumerate(sorted(set(roots)))}
@@ -102,3 +124,19 @@ def split_by_speaker_and_recording(records, *, seed: int = 42) -> DatasetSplit:
         validation_group_ids=tuple(int(groups[index]) for index in sorted(validation_indices)),
         test_group_ids=tuple(int(groups[index]) for index in sorted(test_indices)),
     )
+
+
+def _subset_summary(records: tuple[ManifestRecord, ...], group_count: int) -> dict:
+    labels = ("neutral", "happy", "angry", "sad")
+    class_counts = {label: sum(record.emotion.value == label for record in records) for label in labels}
+    return {
+        "sample_count": len(records),
+        "speaker_count": len({(record.dataset_id, record.speaker_id) for record in records}),
+        "group_count": group_count,
+        "class_counts": class_counts,
+        "missing_classes": [label for label, count in class_counts.items() if count == 0],
+        "dataset_counts": {
+            dataset_id: sum(record.dataset_id == dataset_id for record in records)
+            for dataset_id in sorted({record.dataset_id for record in records})
+        },
+    }

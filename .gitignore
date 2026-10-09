@@ -21,6 +21,8 @@ build/
 *.pth
 *.npy
 *.npz
+*manifest*.csv
+/models/*.json
 /data/private/
 /recordings/
 /speaker_refs/

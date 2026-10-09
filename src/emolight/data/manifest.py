@@ -1,5 +1,6 @@
 import csv
 from dataclasses import dataclass
+import hashlib
 from pathlib import Path
 from typing import Mapping
 
@@ -17,6 +18,9 @@ class ManifestRecord:
     speaker_id: str
     recording_id: str
     dataset_id: str
+    file_sha256: str = ""
+    source_recording_id: str = ""
+    augmentation_group_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -62,6 +66,7 @@ def load_manifest(
 
     records: list[ManifestRecord] = []
     skipped: dict[str, int] = {}
+    content_labels: dict[str, Emotion] = {}
     required = {"path", "emotion", "speaker_id", "recording_id"}
     try:
         stream = manifest_path.open("r", encoding="utf-8-sig", newline="")
@@ -78,6 +83,8 @@ def load_manifest(
             speaker_id = (row.get("speaker_id") or "").strip()
             recording_id = (row.get("recording_id") or "").strip()
             dataset_id = (row.get("dataset_id") or "custom").strip() or "custom"
+            source_recording_id = (row.get("source_recording_id") or "").strip() or recording_id
+            augmentation_group_id = (row.get("augmentation_group_id") or "").strip()
             if not raw_path:
                 raise ManifestError(f"row {row_number}: path is empty")
             if not speaker_id or not recording_id:
@@ -96,9 +103,37 @@ def load_manifest(
             audio_path = audio_path.resolve()
             if not audio_path.is_file():
                 raise ManifestError(f"row {row_number}: audio file does not exist: {raw_path}")
-            records.append(ManifestRecord(audio_path, emotion, speaker_id, recording_id, dataset_id))
+            digest = _sha256_file(audio_path)
+            if digest:
+                previous_emotion = content_labels.get(digest)
+                if previous_emotion is not None and previous_emotion is not emotion:
+                    raise ManifestError(
+                        f"row {row_number}: same audio content has conflicting emotion labels "
+                        f"{previous_emotion.value!r} and {emotion.value!r}"
+                    )
+                content_labels[digest] = emotion
+            records.append(ManifestRecord(
+                path=audio_path,
+                emotion=emotion,
+                speaker_id=speaker_id,
+                recording_id=recording_id,
+                dataset_id=dataset_id,
+                file_sha256=digest,
+                source_recording_id=source_recording_id,
+                augmentation_group_id=augmentation_group_id,
+            ))
     return ManifestLoadResult(
         records=tuple(records),
         skipped_labels=skipped,
         label_mapping={key: emotion.value for key, emotion in labels.items()},
     )
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    if path.stat().st_size == 0:
+        return ""
+    return digest.hexdigest()

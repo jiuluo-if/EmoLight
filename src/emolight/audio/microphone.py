@@ -1,8 +1,16 @@
 from collections.abc import Callable
+from dataclasses import dataclass
 import queue
 import threading
+import time
 
 import numpy as np
+
+
+@dataclass(frozen=True)
+class CapturedAudioFrame:
+    samples: np.ndarray
+    timestamp_ms: int
 
 
 class MicrophoneAudioSource:
@@ -14,16 +22,18 @@ class MicrophoneAudioSource:
         self.sample_rate = sample_rate
         self.frame_ms = frame_ms
         self.blocksize = max(1, round(sample_rate * frame_ms / 1000))
-        self._frames: queue.Queue[np.ndarray] = queue.Queue(maxsize=queue_frames)
+        self._frames: queue.Queue[CapturedAudioFrame] = queue.Queue(maxsize=queue_frames)
         self._stream = None
         self._worker: threading.Thread | None = None
         self._running = False
         self.dropped_frames = 0
         self.last_error: str | None = None
 
-    def start(self, on_audio: Callable[[np.ndarray], None]) -> None:
+    def start(self, on_audio: Callable[[CapturedAudioFrame], None]) -> None:
         if self._running:
             return
+        if self._worker is not None and self._worker.is_alive():
+            raise RuntimeError("previous microphone worker is still shutting down")
         try:
             import sounddevice as sd
         except ImportError as error:
@@ -36,8 +46,12 @@ class MicrophoneAudioSource:
         def enqueue(indata, frames, time_info, status) -> None:
             if status:
                 self.last_error = str(status)
+            captured = CapturedAudioFrame(
+                samples=indata[:, 0].copy(),
+                timestamp_ms=round(time.monotonic() * 1000),
+            )
             try:
-                self._frames.put_nowait(indata[:, 0].copy())
+                self._frames.put_nowait(captured)
             except queue.Full:
                 try:
                     self._frames.get_nowait()
@@ -45,7 +59,7 @@ class MicrophoneAudioSource:
                 except queue.Empty:
                     pass
                 try:
-                    self._frames.put_nowait(indata[:, 0].copy())
+                    self._frames.put_nowait(captured)
                 except queue.Full:
                     self.dropped_frames += 1
 
@@ -64,7 +78,8 @@ class MicrophoneAudioSource:
                 self._stream.close()
                 self._stream = None
             self._worker.join(timeout=1.0)
-            self._worker = None
+            if self._worker.is_alive():
+                self.last_error = "microphone worker did not stop after stream startup failed"
             raise RuntimeError(f"cannot start microphone: {error}") from error
 
     def stop(self) -> None:
@@ -79,11 +94,18 @@ class MicrophoneAudioSource:
             self.last_error = str(error)
         finally:
             self._running = False
+            while True:
+                try:
+                    self._frames.get_nowait()
+                    self.dropped_frames += 1
+                except queue.Empty:
+                    break
             if self._worker is not None:
                 self._worker.join(timeout=2.0)
-                self._worker = None
+                if self._worker.is_alive():
+                    self.last_error = "microphone worker did not stop before timeout"
 
-    def _consume(self, on_audio: Callable[[np.ndarray], None]) -> None:
+    def _consume(self, on_audio: Callable[[CapturedAudioFrame], None]) -> None:
         while self._running or not self._frames.empty():
             try:
                 frame = self._frames.get(timeout=0.1)

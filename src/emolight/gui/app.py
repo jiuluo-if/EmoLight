@@ -7,6 +7,7 @@ from emolight.audio.microphone import MicrophoneAudioSource
 from emolight.config import AppConfig, LightingConfig
 from emolight.demo import make_demo_event
 from emolight.emotion.predictor import ModelStatus, UnconfiguredEmotionPredictor
+from emolight.emotion.linear import NumpyLinearEmotionPredictor
 from emolight.events import Emotion
 from emolight.lighting.controller import SimulatorLightController
 from emolight.lighting.policy import EmotionLightingPolicy, LightCommand
@@ -28,13 +29,12 @@ class EmotionSimulatorApp:
         self.night = tk.BooleanVar(value=False)
         self.manual_override = False
         self.mic_source: MicrophoneAudioSource | None = None
+        self._mic_session_id = 0
         predictor = UnconfiguredEmotionPredictor()
         self.model_load_error: str | None = None
         if app_config.emotion_model_path:
             try:
-                from emolight.emotion.sklearn_predictor import SklearnEmotionPredictor
-
-                predictor = SklearnEmotionPredictor.load(
+                predictor = NumpyLinearEmotionPredictor.load(
                     app_config.emotion_model_path,
                     expected_sample_rate=app_config.audio.sample_rate_hz,
                     expected_frame_ms=app_config.audio.frame_ms,
@@ -63,6 +63,7 @@ class EmotionSimulatorApp:
         )
         self.result_queue: LatestOnlyQueue[RuntimeSnapshot] = LatestOnlyQueue()
         self._closed = False
+        self._last_rendered_timestamp_ms = -1
         self._draw_rgb = (244, 231, 210)
         self._draw_brightness = 0.12
         self._transition_callback: str | None = None
@@ -161,20 +162,24 @@ class EmotionSimulatorApp:
 
     def _toggle_microphone(self) -> None:
         if self.mic_source is not None:
-            self.mic_source.stop()
-            self.mic_source = None
+            self._mic_session_id += 1
+            source, self.mic_source = self.mic_source, None
+            source.stop()
             self._update_recognition_status("已停止")
             return
         source = MicrophoneAudioSource(
             sample_rate=self.runtime.sample_rate,
             frame_ms=self.config.audio.capture_frame_ms,
         )
+        self._mic_session_id += 1
+        session_id = self._mic_session_id
+        self.mic_source = source
         try:
-            source.start(self._process_audio_frame)
+            source.start(lambda frame: self._process_audio_frame(frame, session_id=session_id))
         except RuntimeError as error:
+            self.mic_source = None
             self._update_recognition_status(f"不可用：{error}")
             return
-        self.mic_source = source
         self._update_recognition_status("已连接")
 
     def _update_recognition_status(self, microphone_status: str) -> None:
@@ -194,19 +199,26 @@ class EmotionSimulatorApp:
             )
         )
 
-    def _process_audio_frame(self, samples) -> None:
-        if self._closed:
+    def _process_audio_frame(self, frame, *, session_id: int | None = None) -> None:
+        if (
+            self._closed
+            or self.mic_source is None
+            or (session_id is not None and session_id != self._mic_session_id)
+        ):
             return
-        snapshot = self.runtime.feed_snapshot(samples, timestamp_ms=round(time.monotonic() * 1000))
-        if snapshot is not None:
+        snapshot = self.runtime.feed_snapshot(frame.samples, timestamp_ms=frame.timestamp_ms)
+        if snapshot is not None and not self._closed and self.mic_source is not None and (
+            session_id is None or session_id == self._mic_session_id
+        ):
             self.result_queue.publish(snapshot)
 
     def _poll_results(self) -> None:
         if self._closed:
             return
         snapshot = self.result_queue.take_latest()
-        if snapshot is not None:
+        if snapshot is not None and snapshot.timestamp_ms > self._last_rendered_timestamp_ms:
             self._show_live_status(snapshot)
+            self._last_rendered_timestamp_ms = snapshot.timestamp_ms
         self.root.after(50, self._poll_results)
 
     def _show_live_status(self, snapshot: RuntimeSnapshot) -> None:
@@ -229,9 +241,10 @@ class EmotionSimulatorApp:
 
     def _close(self) -> None:
         self._closed = True
+        self._mic_session_id += 1
         if self.mic_source is not None:
-            self.mic_source.stop()
-            self.mic_source = None
+            source, self.mic_source = self.mic_source, None
+            source.stop()
         self.root.destroy()
 
     def _apply(self, command: LightCommand) -> None:

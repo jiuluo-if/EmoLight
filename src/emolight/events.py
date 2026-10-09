@@ -33,6 +33,10 @@ class EmotionEvent:
     audio_quality: float = 0.0
     timestamp_ms: int = 0
     source: EventSource = EventSource.LIVE
+    model_version: str | None = None
+    calibration_status: str | None = None
+    decision_threshold: float | None = None
+    validation_record_id: str | None = None
 
     def __post_init__(self) -> None:
         for name in ("emotion_confidence", "speaker_confidence", "audio_quality"):
@@ -43,6 +47,8 @@ class EmotionEvent:
             raise ValueError("timestamp_ms must be non-negative")
         if self.status is SystemStatus.NOT_CONFIGURED and self.emotion is not None:
             raise ValueError("NOT_CONFIGURED events cannot contain an emotion")
+        if self.decision_threshold is not None and not 0.0 <= self.decision_threshold <= 1.0:
+            raise ValueError("decision_threshold must be between 0 and 1")
 
     @classmethod
     def unknown(cls, status: SystemStatus, timestamp_ms: int = 0) -> "EmotionEvent":

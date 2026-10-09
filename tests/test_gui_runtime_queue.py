@@ -13,8 +13,11 @@ class StubRuntime:
 
     def __init__(self, snapshot):
         self.snapshot = snapshot
+        self.feed_calls = 0
 
     def feed_snapshot(self, samples, timestamp_ms):
+        self.feed_calls += 1
+        self.last_timestamp_ms = timestamp_ms
         return self.snapshot
 
 
@@ -39,10 +42,41 @@ def test_audio_worker_publishes_snapshot_without_calling_tk():
     app.result_queue = LatestOnlyQueue()
     app.root = TkCallForbidden()
     app._closed = False
+    app.mic_source = object()
 
-    app._process_audio_frame(np.ones(10, dtype=np.float32))
+    app._process_audio_frame(type("CapturedFrame", (), {"samples": np.ones(10, dtype=np.float32), "timestamp_ms": 7})())
 
     assert app.result_queue.take_latest() is snapshot
+    assert app.runtime.feed_calls == 1
+
+
+def test_audio_worker_drops_queued_callback_after_microphone_stops():
+    app = EmotionSimulatorApp.__new__(EmotionSimulatorApp)
+    app.runtime = StubRuntime(None)
+    app.result_queue = LatestOnlyQueue()
+    app._closed = False
+    app.mic_source = None
+
+    app._process_audio_frame(type("CapturedFrame", (), {"samples": np.ones(10), "timestamp_ms": 9})())
+
+    assert app.runtime.feed_calls == 0
+    assert app.result_queue.take_latest() is None
+
+
+def test_audio_worker_drops_frame_from_previous_microphone_session():
+    app = EmotionSimulatorApp.__new__(EmotionSimulatorApp)
+    app.runtime = StubRuntime(None)
+    app.result_queue = LatestOnlyQueue()
+    app._closed = False
+    app.mic_source = object()
+    app._mic_session_id = 2
+
+    app._process_audio_frame(
+        type("CapturedFrame", (), {"samples": np.ones(10), "timestamp_ms": 9})(),
+        session_id=1,
+    )
+
+    assert app.runtime.feed_calls == 0
 
 
 def test_ui_polls_latest_snapshot_on_main_thread():
@@ -54,6 +88,7 @@ def test_ui_polls_latest_snapshot_on_main_thread():
     app.result_queue = LatestOnlyQueue()
     app.result_queue.publish(snapshot)
     app._closed = False
+    app._last_rendered_timestamp_ms = -1
     rendered = []
     app._show_live_status = rendered.append
 
@@ -62,6 +97,24 @@ def test_ui_polls_latest_snapshot_on_main_thread():
     assert rendered == [snapshot]
     assert len(root.scheduled) == 1
     assert root.scheduled[0][0] == 50
+
+
+def test_gui_drops_runtime_snapshots_older_than_last_rendered_timestamp():
+    features = AcousticFeatures(1.0, 0.1, 0.2, 0.0, 0.8, quality_status=AudioQualityStatus.ACCEPTABLE)
+    newer = RuntimeSnapshot(EmotionEvent.unknown(SystemStatus.UNCERTAIN, 20), features, 20)
+    older = RuntimeSnapshot(EmotionEvent.unknown(SystemStatus.UNCERTAIN, 10), features, 10)
+    app = EmotionSimulatorApp.__new__(EmotionSimulatorApp)
+    app._closed = False
+    app.root = TkPollRecorder()
+    app.result_queue = LatestOnlyQueue()
+    app._last_rendered_timestamp_ms = 20
+    rendered = []
+    app._show_live_status = rendered.append
+    app.result_queue.publish(older)
+
+    app._poll_results()
+
+    assert rendered == []
 
 
 def test_gui_status_explains_unavailable_speaker_adapter_and_emotion_model():

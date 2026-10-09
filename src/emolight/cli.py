@@ -7,6 +7,7 @@ from typing import Sequence
 
 from emolight.demo import make_demo_event
 from emolight.emotion.predictor import EmotionPrediction, ModelStatus, UnconfiguredEmotionPredictor
+from emolight.emotion.linear import NumpyLinearEmotionPredictor
 from emolight.events import Emotion, EmotionEvent, SystemStatus
 from emolight.audio.wav import load_wav
 from emolight.config import AppConfig, AudioConfig, load_app_config
@@ -36,7 +37,7 @@ def run(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--wav", help="analyze a local PCM WAV file without emotion inference")
     parser.add_argument("--config", help="JSON configuration file for audio, models, and lighting")
     parser.add_argument("--emotion-only", action="store_true", help="offline emotion classification without speaker identity verification")
-    parser.add_argument("--model", help="trusted local calibrated SVM artifact; requires --emotion-only")
+    parser.add_argument("--model", help="local validation-calibrated NumPy JSON model; requires --emotion-only")
     args = parser.parse_args(argv)
     if args.emotion_only and (args.demo or not args.no_gui or not args.wav or not args.model):
         parser.error("--emotion-only requires --no-gui, --wav, and --model, and cannot be combined with --demo")
@@ -58,8 +59,6 @@ def run(argv: Sequence[str] | None = None) -> int:
         except (OSError, ValueError, EOFError) as error:
             print(f"emolight: cannot analyze WAV: {error}", file=sys.stderr)
             return 2
-        from emolight.emotion.sklearn_predictor import SklearnEmotionPredictor
-
         audio_config = app_config.audio
         if audio.sample_rate != audio_config.sample_rate_hz:
             print(
@@ -67,7 +66,7 @@ def run(argv: Sequence[str] | None = None) -> int:
                 file=sys.stderr,
             )
             return 2
-        predictor = SklearnEmotionPredictor.load(
+        predictor = NumpyLinearEmotionPredictor.load(
             args.model,
             expected_sample_rate=audio_config.sample_rate_hz,
             expected_frame_ms=audio_config.frame_ms,
@@ -96,6 +95,10 @@ def run(argv: Sequence[str] | None = None) -> int:
                 rejection_status=rejection,
                 timestamp_ms=int(time.time() * 1000),
                 audio_quality=acoustic_features.audio_quality,
+                model_version=predictor.metadata.get("model_version"),
+                calibration_status=predictor.metadata.get("calibration_status", "UNCALIBRATED"),
+                decision_threshold=predictor.metadata.get("rejection_threshold"),
+                validation_record_id=predictor.validation_record_id,
             )
         payload = {
             "mode": "OFFLINE_EMOTION_ONLY",
@@ -105,6 +108,10 @@ def run(argv: Sequence[str] | None = None) -> int:
                 "status": prediction.rejection_status.value if prediction.rejection_status else prediction.model_status.value,
                 "model_status": prediction.model_status.value,
                 "rejection_status": prediction.rejection_status.value if prediction.rejection_status else None,
+                "model_version": prediction.model_version,
+                "calibration_status": prediction.calibration_status,
+                "decision_threshold": prediction.decision_threshold,
+                "validation_record_id": prediction.validation_record_id,
                 "quality_status": acoustic_features.quality_status.value,
                 "emotion": prediction.emotion.value if prediction.emotion else None,
                 "confidence": prediction.confidence,

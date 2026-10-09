@@ -6,7 +6,10 @@ from emolight.data.manifest import ManifestError, load_manifest
 
 
 def write_csv(path, rows):
-    fields = ("path", "emotion", "speaker_id", "recording_id", "dataset_id")
+    fields = (
+        "path", "emotion", "speaker_id", "recording_id", "dataset_id",
+        "source_recording_id", "augmentation_group_id",
+    )
     with path.open("w", encoding="utf-8", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=fields)
         writer.writeheader()
@@ -55,3 +58,41 @@ def test_manifest_supports_user_label_mapping(tmp_path):
 
     assert result.records[0].emotion.value == "happy"
     assert result.label_mapping["joy"] == "happy"
+
+
+def test_manifest_records_normalized_path_hash_and_augmentation_lineage(tmp_path):
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir()
+    source = audio_dir / "source.wav"
+    duplicate = audio_dir / "copy.wav"
+    source.write_bytes(b"same local test audio")
+    duplicate.write_bytes(source.read_bytes())
+    manifest_path = tmp_path / "manifest.csv"
+    write_csv(manifest_path, [
+        {"path": "audio/source.wav", "emotion": "happy", "speaker_id": "spk1", "recording_id": "r1", "dataset_id": "d1", "source_recording_id": "source-r1"},
+        {"path": "audio/copy.wav", "emotion": "happy", "speaker_id": "spk2", "recording_id": "r2", "dataset_id": "d2", "augmentation_group_id": "aug-source-r1"},
+    ])
+
+    records = load_manifest(manifest_path).records
+
+    assert records[0].path == source.resolve()
+    assert records[0].file_sha256 == records[1].file_sha256
+    assert records[0].source_recording_id == "source-r1"
+    assert records[1].augmentation_group_id == "aug-source-r1"
+
+
+def test_manifest_rejects_same_audio_content_with_conflicting_emotion_labels(tmp_path):
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir()
+    first = audio_dir / "first.wav"
+    second = audio_dir / "second.wav"
+    first.write_bytes(b"same audio content")
+    second.write_bytes(first.read_bytes())
+    manifest_path = tmp_path / "conflicting.csv"
+    write_csv(manifest_path, [
+        {"path": "audio/first.wav", "emotion": "happy", "speaker_id": "s1", "recording_id": "r1", "dataset_id": "d1"},
+        {"path": "audio/second.wav", "emotion": "sad", "speaker_id": "s2", "recording_id": "r2", "dataset_id": "d2"},
+    ])
+
+    with pytest.raises(ManifestError, match="same audio content.*conflicting emotion labels"):
+        load_manifest(manifest_path)

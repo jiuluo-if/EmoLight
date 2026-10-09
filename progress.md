@@ -1,5 +1,22 @@
 # Progress Log
 
+## Phase 3 continuation — 2026-10-09
+- 读取用户新提供的 Phase 3 规格；冻结灯光实现范围。
+- 核实 `origin/main`=`64897c85ecd07a2ab1b1ac1504e59412eec10da6`，与规格一致；本地 main 有一个仅 `.gitignore` 的提交，未改写该分支。
+- 在干净的既有 feature worktree 新建 `feat/phase3-reliability-baselines`，祖先包含指定 main SHA。
+- 在 attachments 与 `F:\codex` 索引中未发现 `EmoLight_emotion_phase2.patch`；已向用户请求该补丁，同时继续独立审计。
+- 当前实现与指定补丁不等价：现有 32 维 prosody/sklearn joblib，缺 24 维 pure NumPy `linear.py`/scripts、validation-only threshold/calibration 及 simple/full 同划分对照。
+- 修改前全量基线：`python -m pytest -q` → **71 passed**；该基线建立在 phase3 feature 分支尚未修改源代码时。
+- Phase 3 TDD data step: 新增 manifest hash/lineage、同一 WAV 不同 speaker/recording ID、复制文件/增强谱系不跨组、每 split 类别与 speaker 分布测试；先运行失败，再实现 union-find 和摘要。聚焦数据测试：**9 passed**。
+- 新增实现：`emotion-prosody-24-v1`/`energy-rhythm-8-v1` extractor、有效帧和 F0 missingness、NumPy-only JSON predictor、training-only standardization/imputation、validation sigmoid calibration 与 correctness-F1 threshold 选择、同 split simple/full trainer。后续已接入 CLI/GUI/runtime 并移除 joblib 路径。
+- 评估器现按用户确认 guard 独立生成 clean/noise/overlap/reverb metrics；训练不读取 test audio/features，只保存 split 计数。evaluation result includes per-stage latency, CPU, peak RSS, model size/parameter count, coverage, selective error and per-class metrics.
+- Mic callback frames carry monotonic arrival timestamp; stop clears pending queue and joins the worker. GUI ignores frames from closed/previous capture sessions, polls results only on Tk main thread and skips older timestamps.
+- 当前全量 pytest 最近一次：**92 passed**；之后仍有小范围配置/metadata/test 改动，需最终重新跑全量测试和CLI/package verification。当前没有真实数据/噪声/speaker encoder，故没有真实情绪性能或房间鲁棒结论。
+- 完成 simple/full 同 manifest、同 seed、同噪声与 held-out 条件评估入口；报告逐条件 `full - simple` 的 Macro-F1/UAR/coverage/rejection/selective-error 差值。追加 1 项回归后全量测试为 **96 passed**。
+- 包入口验证首次发现当前环境遗留旧 `emolight-train -> train_svm` entry point；`pip install --no-deps -e .` 按当前 pyproject 刷新后，entry point 指向 `train_linear:main`，训练和评估 CLI 的 `--help` 均可启动。
+- 最终验证：`python -m pytest -q` **96 passed**；`python -m compileall -q src scripts`、`git diff --check`、`emolight --no-gui`、`emolight-train --help`、`emolight-evaluate --help` 均通过。未用合成数据声称真实性能，未验证真实麦克风/真实噪声/灯带硬件。
+- 灯光模块 `src/emolight/lighting/` 未修改。Phase 3 分支待提交并推送；不合并 main。
+
 ## Session: 2026-10-09
 
 ### Current Status

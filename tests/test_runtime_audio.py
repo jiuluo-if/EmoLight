@@ -45,7 +45,15 @@ def test_runtime_snapshot_keeps_audio_quality_and_event_on_the_same_window():
 
     class HappyPredictor:
         def predict(self, features, timestamp_ms=0):
-            return EmotionPrediction(Emotion.HAPPY, 0.9, model_status=ModelStatus.READY)
+            return EmotionPrediction(
+                Emotion.HAPPY,
+                0.9,
+                model_status=ModelStatus.READY,
+                model_version="test-linear-v1",
+                calibration_status="CALIBRATED",
+                decision_threshold=0.5,
+                validation_record_id="validation-digest",
+            )
 
     class TargetVerifier:
         def verify(self, audio):

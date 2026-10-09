@@ -1,7 +1,8 @@
 import csv
+from dataclasses import replace
 
 from emolight.data.manifest import load_manifest
-from emolight.data.split import split_by_speaker_and_recording
+from emolight.data.split import _connected_groups, split_by_speaker_and_recording
 
 
 def make_manifest(tmp_path):
@@ -57,3 +58,75 @@ def test_split_rejects_too_few_independent_groups(tmp_path):
         assert "at least 5" in str(error)
     else:
         raise AssertionError("expected insufficient independent speaker groups to fail")
+
+
+def test_same_wav_with_different_speaker_and_recording_ids_stays_in_one_group(tmp_path):
+    records = make_manifest(tmp_path)
+    original = replace(records[0], file_sha256="duplicate-content-hash")
+    records = (original,) + records[1:]
+    duplicate_path = replace(
+        original,
+        speaker_id="spoofed-speaker-id",
+        recording_id="spoofed-recording-id",
+    )
+
+    group_ids = _connected_groups(records + (duplicate_path,))
+
+    assert group_ids[0] == group_ids[-1]
+    split = split_by_speaker_and_recording(records + (duplicate_path,), seed=19)
+    path_sets = [
+        {record.path.resolve().as_posix().casefold() for record in subset}
+        for subset in (split.train, split.validation, split.test)
+    ]
+    assert path_sets[0].isdisjoint(path_sets[1])
+    assert path_sets[0].isdisjoint(path_sets[2])
+    assert path_sets[1].isdisjoint(path_sets[2])
+
+
+def test_duplicate_audio_copy_and_augmentation_versions_share_split_group(tmp_path):
+    records = make_manifest(tmp_path)
+    original = replace(records[0], file_sha256="duplicate-content-hash")
+    records = (original,) + records[1:]
+    duplicate_copy = replace(
+        original,
+        path=(original.path.parent / "copy.wav").resolve(),
+        speaker_id="other-dataset-speaker",
+        recording_id="copied-id",
+        dataset_id="other-dataset",
+        file_sha256="duplicate-content-hash",
+    )
+    augmented = replace(
+        records[1],
+        path=(records[1].path.parent / "augmented.wav").resolve(),
+        speaker_id="augmentation-speaker",
+        recording_id="augmentation-recording",
+        source_recording_id=records[1].recording_id,
+        augmentation_group_id="aug-group-1",
+    )
+    augmentation_base = replace(
+        records[2],
+        source_recording_id=records[1].recording_id,
+        augmentation_group_id="aug-group-1",
+    )
+
+    group_ids = _connected_groups(records + (duplicate_copy, augmented, augmentation_base))
+
+    assert group_ids[0] == group_ids[len(records)]
+    assert group_ids[1] == group_ids[len(records) + 1]
+    assert group_ids[1] == group_ids[len(records) + 2]
+
+
+def test_split_metadata_reports_each_subset_class_and_speaker_counts(tmp_path):
+    records = make_manifest(tmp_path)
+    split = split_by_speaker_and_recording(records, seed=19)
+
+    metadata = split.to_metadata()
+
+    for name, subset in (("train", split.train), ("validation", split.validation), ("test", split.test)):
+        summary = metadata["subsets"][name]
+        assert summary["sample_count"] == len(subset)
+        assert summary["speaker_count"] == len({(r.dataset_id, r.speaker_id) for r in subset})
+        assert summary["class_counts"] == {
+            label: sum(record.emotion.value == label for record in subset)
+            for label in ("neutral", "happy", "angry", "sad")
+        }
