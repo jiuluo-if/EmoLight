@@ -1,13 +1,13 @@
-# Task Plan: EmoLight PC MVP
+# Task Plan: EmoLight PC MVP and Real Emotion MVP
 
 ## Goal
-建立可离线启动、明确区分真实音频状态与模拟演示的情绪感知灯光 PC MVP。
+在现有 EmoLight PC MVP 上增量建立可真实评测的非语义声学情绪分类与严格目标身份门控，同时保持默认拒识和原 CLI/演示兼容。
 
 ## Next Step
-首轮 PC MVP 已交付；真实声纹/情绪模型、串口和实体灯带属于后续阶段。
+实现 32 维 `prosody-v1` 固定特征向量及合成音频测试，保留 AcousticFeatures 兼容。
 
 ## Current Phase
-Phase 4
+Phase 6
 
 ## Phases
 
@@ -41,9 +41,7 @@ Phase 4
 - **Status:** complete
 
 ## Delivery
-- GitHub: `https://github.com/jiuluo-if/EmoLight` (private)
-- Implementation commit pushed: `187e45bd29772bad307e168efce92de67fdae3a8`
-- Email: `2966684515@qq.com`
+- Previous implementation commit: `187e45bd29772bad307e168efce92de67fdae3a8`
 
 ## Decisions Made
 | Decision | Rationale |
@@ -56,8 +54,46 @@ Phase 4
 ## Errors Encountered
 | Error | Resolution |
 |-------|------------|
-| 初次使用了错误的全局 skill 路径 | 改用 `C:\Users\联想\.agents\skills` 正确路径 |
+| 初次使用了错误的全局 skill 路径 | 改为正确的已安装 skill 路径 |
 | 当前目录不存在 Git 元数据 | 确认工作区为空；项目初始化后检查远端设置 |
 | 更新设计文档时补丁因原句略有差异未匹配 | 读取文档现状后按实际文本重试 |
 | 两次补丁未匹配当前文档/代码行 | 重新读取文件，按现状更新；没有部分写入 |
 | console script 曾因缺少 `main()` 启动失败 | 新增入口测试和 wrapper，安装后的命令已通过 |
+| 本阶段多文件补丁因表格上下文不一致未应用 | 检查文件后拆分编辑，没有部分写入 |
+| GitHub HTTPS 推送被连接中断且 CLI keyring token 无效 | 本地提交保留；继续核对认证通道和远端状态 |
+
+## Phase 6: Real Emotion MVP
+
+### Phase 6.1: Baseline and identity gate
+- [x] 复核当前 main 基线、清洁状态和审计缺口
+- [x] 现有测试基线：22 passed
+- [x] 运行时按 VAD→身份验证→情绪预测，未验证身份时不调用预测器
+- [x] 为 NON_TARGET、SILENCE、OVERLAP、LOW_QUALITY、NOT_CONFIGURED 增加状态测试
+- [x] 阻止 EmotionPrediction 携带身份/VAD 状态
+- [x] 保留旧 WAV CLI JSON 与未配置预测器状态访问兼容
+- [x] 全量测试：30 passed
+- **Status:** complete
+
+### Phase 6.2: Prosody feature contract
+- [ ] 新增有 schema/version/frame metadata 的固定 32 维因果韵律向量
+- [ ] 添加正弦、静音、噪声、异常浮点、削波和帧边界测试
+- [ ] AcousticFeatures 旧 API 保持兼容，质量/活动/削波分开
+
+### Phase 6.3: Trainable CPU baseline
+- [ ] 添加 manifest dataset adapter 和 speaker/recording-connected split
+- [ ] 添加 StandardScaler + calibrated LinearSVC 训练、元数据和安全加载
+- [ ] 模型缺失/损坏/schema/class mismatch 均 fail-closed
+- [ ] 添加显式离线 emotion-only CLI，不生成目标身份结论
+
+### Phase 6.4: Evaluation and robustness
+- [ ] 训练、验证和测试工具输出 Macro-F1、UAR、每类 PR、混淆矩阵、校准指标
+- [ ] 支持 20/10/5/0 dB 噪声和独立他人语音混入比例实验
+- [ ] 记录划分谱系、模型大小、CPU 延迟和峰值内存；合成数据只测流程
+- [ ] 没有真实标注数据时，标记真实训练/性能未完成，不伪造指标
+
+### Phase 6.5: Quality, runtime, and delivery
+- [ ] 最小活动比例及连续帧门控；同一窗口快照共享质量和预测
+- [ ] 统一音频采样率/窗口/刷新配置；结果队列 latest-only 且有界
+- [ ] 补充 .gitignore、README、移除文档中的本地个人路径
+- [ ] 全量测试、代码审查、提交并推送任务分支
+- **Status:** in_progress

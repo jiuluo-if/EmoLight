@@ -29,5 +29,12 @@
 - GUI 窗口构造、CLI 模拟与未配置输出、偏好配置加载已验证。实际麦克风未打开，未连接硬件，没有训练模型。
 - 安装后 CLI 曾因缺少 `main()` 启动失败；已修复并验证 `emolight --no-gui`。
 - 最终验证：`python -m compileall -q src tests` 通过；`python -m pytest -q` 为 22 passed；headless LIVE/SIMULATION/config 命令通过；Tkinter 自动/夜间/手动交互冒烟通过；`git diff --check` 通过（仅 Git 的 LF/CRLF 提示）。
-- 使用邮箱 `2966684515@qq.com` 提交 `187e45bd29772bad307e168efce92de67fdae3a8`，提交说明符合英文加中文格式。
-- 已创建私有仓库 `https://github.com/jiuluo-if/EmoLight` 并推送 `main`；`git ls-remote` 返回 SHA 与本地提交一致，工作区干净。
+- 上一阶段实现提交 `187e45bd29772bad307e168efce92de67fdae3a8` 已推送到项目远端 main。
+
+## Real Emotion MVP Stage
+
+- 当前 worktree：`.worktrees/real-emotion-mvp`，branch `feat/real-emotion-mvp`，基于本地 main `5dce973`。
+- 已复核：runtime 没有身份 verifier；任意单帧活动即可调用 predictor；完整 EmotionEvent 可由 predictor 返回。新阶段初始测试基线 22 passed。
+- 数据检查：没有音频 manifest 或模型权重。真实性能训练须待用户提供许可合规标注语料。
+- GitHub：`5dce973` 尚未推送；HTTPS 连接中止，`gh auth status` 显示 keyring token 无效。先继续本地实现，交付时再安全核验推送。
+- Phase 6.1 completed: EmotionPrediction no longer contains identity status; runtime now owns TARGET_ACTIVE event construction after activity, quality and speaker gates. Compatibility tests pass; full suite is 30 passed.

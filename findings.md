@@ -8,10 +8,11 @@
 - 灯光默认无闪烁、亮度上限约 40%、过渡至少 1.5 秒、手动优先。
 
 ## Research Findings
-- 工作区 `F:\codex\emotion` 起初是空目录；现已建立独立 EmoLight Python 项目和 `main` 初始分支。
-- 已有相关 EmotiScreen 记忆属于另一目录和另一产品流程，不适合作为此 EmoLight 项目的代码或能力证明。
-- Git 邮箱已配置为 `2966684515@qq.com`；GitHub CLI 登录账号为 `jiuluo-if`；没有同名 EmoLight repository。
-- 已创建私有 `jiuluo-if/EmoLight` 并把实现提交推送到 `main`；推前后 SHA 已核对一致。
+- 当前工作位于 `feat/real-emotion-mvp` 隔离 worktree，基于 main 提交 `5dce973`。
+- 新阶段开始时 main 工作区清洁，原测试基线 22 passed；身份门控审计问题确实仍存在。
+- `data/` 只有许可说明，没有可用于真实性能评估的标注数据；`models/` 没有模型权重。
+- GitHub CLI 当前 keyring token 无效；新 `.gitignore` 提交已在本地 main，但 push 连接中断，需后续核对并推送。
+- 身份门控修复后，全量测试为 30 passed；假 happy 预测器仅在 verifier 可信返回 TARGET_ACTIVE 后才会被调用，EmotionPrediction 不能编码 speaker/VAD 状态。
 
 ## Technical Decisions
 | Decision | Rationale |
@@ -24,6 +25,9 @@
 | 当前使用能量门限 VAD 与未配置 speaker/emotion adapters | 保留可替换契约，模型通过验证前 fail-closed |
 | 第一版 GUI 展示模拟状态、灯带、自动/夜间/手动控制 | 确保无麦克风和硬件也能完整运行 |
 | 用户颜色、亮度限制和过渡时长从 JSON 读取 | 允许按个人舒适度调整，同时校验频闪、RGB 和过渡安全条件 |
+| 新增独立 `EmotionPrediction`；runtime 只在 SpeakerVerifier 可信后包装为 TARGET_ACTIVE | 分类分数不能代替身份验证；旧 `UnconfiguredEmotionPredictor` 兼容层可保留 |
+| 使用有 schema/采样元数据的固定 32 维 prosody-v1 向量 | 训练和推理共享特征实现，并可拒绝不匹配模型 |
+| 训练产物记录类别顺序、schema、采样参数、划分摘要和版本 | 防止运行时加载含义不一致或数据泄漏模型 |
 
 ## Issues Encountered
 | Issue | Resolution |
@@ -32,4 +36,4 @@
 | 安装后的 `emolight.exe` 曾报 `cannot import name 'main'` | 增加项目入口 `main()` 并通过入口回归测试和命令验证 |
 
 ## Resources
-- 用户附件：`C:\Users\联想\.codex\attachments\04062e8e-1b33-43fb-bc0f-c52ab5e6918d\pasted-text-1.txt`
+- 规格来源：本轮用户提供的 EmoLight 下一阶段目标；仓库文档不保留个人本地附件路径。
