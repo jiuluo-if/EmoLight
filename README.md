@@ -90,7 +90,7 @@ emolight-evaluate --manifest data/private/emodb-1.3.0/prepared/emodb_manifest.cs
 
 数据为德语表演情绪语音。该基线不证明自然对话、普通话、其他说话人群体或真实房间环境中的性能；当前 happy 召回率过低，不适合作为可靠情绪判断或目标人物灯光控制依据。
 
-安装后也可使用 `emolight` 命令。桌面 UI 的标题与事件栏持续显示 `SIMULATION`，四类分数和唤醒度仅在模拟事件中显示。
+安装后也可使用 `emolight` 命令。桌面 UI 的模拟事件标记为 `SIMULATION`，四类分数和唤醒度仅在模拟事件中显示；麦克风运行时状态栏标记为 `LIVE`，只显示音频质量、活动和身份门控状态，不显示情绪分数。EmoDB 实时情绪分数目前只能通过 `EMOTION_ONLY_EXPERIMENTAL` CLI 路径查看，该路径不验证目标身份、不生成目标事件，也不驱动灯光。
 
 ## 测试
 
