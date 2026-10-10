@@ -189,17 +189,34 @@ class NumpyLinearEmotionPredictor:
         training_library = artifact.get("training_library")
         if not isinstance(training_library, dict):
             raise ValueError("training library parameters are required")
+        classifier_type = training_library.get("classifier")
+        if not training_library.get("scikit_learn_version") or classifier_type not in {"LinearSVC", "LogisticRegression"}:
+            raise ValueError("unsupported or incomplete training metadata")
+        if classifier_type == "LinearSVC" and training_library.get("dual") != "auto":
+            raise ValueError("unsupported LinearSVC training parameters")
+        if classifier_type == "LogisticRegression":
+            max_iterations = training_library.get("max_iter")
+            if (
+                training_library.get("solver") != "lbfgs"
+                or training_library.get("dual") is not None
+                or type(max_iterations) is not int
+                or max_iterations <= 0
+            ):
+                raise ValueError("unsupported LogisticRegression training parameters")
         if (
-            not training_library.get("scikit_learn_version")
-            or training_library.get("classifier") != "LinearSVC"
-            or training_library.get("dual") != "auto"
-            or training_library.get("standardization") != "training split only"
+            training_library.get("standardization") != "training split only"
             or training_library.get("imputation") != "per-feature training median; fail if a column has no observations"
         ):
-            raise ValueError("unsupported or incomplete training metadata")
+            raise ValueError("unsupported preprocessing provenance")
         classifier_c = training_library.get("C")
         if not isinstance(classifier_c, (int, float)) or not np.isfinite(classifier_c) or classifier_c <= 0.0:
-            raise ValueError("invalid LinearSVC C metadata")
+            raise ValueError("invalid linear classifier C metadata")
+        class_weight = training_library.get("class_weight")
+        if class_weight is not None:
+            if not isinstance(class_weight, dict) or set(class_weight) != set(classes):
+                raise ValueError("invalid class-weight metadata")
+            if any(not isinstance(value, (int, float)) or not np.isfinite(value) or value <= 0 for value in class_weight.values()):
+                raise ValueError("class weights must be finite and positive")
         train_counts = training.get("class_counts", {})
         validation_counts = validation.get("class_counts", {})
         if any(int(train_counts.get(label, 0)) <= 0 for label in classes):

@@ -219,12 +219,12 @@ def prepare_emodb_archive(
     metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
     return {
         "status": "PREPARED",
-        "manifest_path": str(manifest_path),
-        "metadata_path": str(metadata_path),
+        "manifest_file": manifest_path.name,
+        "metadata_file": metadata_path.name,
         "window_count": len(manifest_rows),
         "ignored_emotion_counts": dict(sorted(ignored.items())),
         "class_counts_by_split": metadata["split_window_class_counts"],
-        "speaker_ids_by_split": metadata["split_speaker_ids"],
+        "speaker_counts_by_split": {name: len(values) for name, values in metadata["split_speaker_ids"].items()},
         "archive_md5": digest,
     }
 
@@ -359,7 +359,7 @@ def main(argv: list[str] | None = None) -> int:
         archive_path = Path(args.archive) if args.archive else download_emodb_archive(Path(args.output_dir).parent / "emodb.zip")
         report = prepare_emodb_archive(archive_path, args.output_dir, seed=args.seed, window_s=args.window_s, stride_s=args.stride_s)
     except (OSError, ValueError, RuntimeError, URLError) as error:
-        parser.exit(2, f"prepare_emodb.py: {error}\n")
+        parser.exit(2, f"prepare_emodb.py: operation failed ({type(error).__name__})\n")
     print(json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False))
     return 0
 

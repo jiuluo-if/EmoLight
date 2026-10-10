@@ -35,6 +35,7 @@ def test_microphone_callback_enqueues_frames_for_worker(monkeypatch):
     assert received[0].samples.tolist() == [1.0, 1.0, 1.0, 1.0]
     assert received[0].timestamp_ms > 0
     assert source.dropped_frames == 0
+    assert source.worker_alive is False
     assert source._worker is not None and not source._worker.is_alive()
 
 

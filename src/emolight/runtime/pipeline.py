@@ -70,6 +70,13 @@ class RealtimeFeatureRuntime:
         self.latest_prosody: ProsodyFeatures | None = None
         self._last_update_ms: int | None = None
 
+    def clear_audio_cache(self) -> None:
+        """Erase the retained microphone window and cached derived features."""
+        self.buffer.clear()
+        self.latest_features = None
+        self.latest_prosody = None
+        self._last_update_ms = None
+
     def feed(self, samples: np.ndarray, timestamp_ms: int) -> EmotionEvent | None:
         snapshot = self.feed_snapshot(samples, timestamp_ms)
         return snapshot.event if snapshot is not None else None

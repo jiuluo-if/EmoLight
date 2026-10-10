@@ -52,8 +52,14 @@ def train_linear_models(
     window_s: float = 1.5,
     update_interval_s: float = 0.5,
     label_map: Mapping[str, str | Emotion] | None = None,
+    classifier_type: str = "LinearSVC",
+    happy_class_weight: float = 1.0,
 ) -> dict:
     """Fit simple/full models, calibrate only on validation, and leave test untouched."""
+    if classifier_type not in {"LinearSVC", "LogisticRegression"}:
+        raise ValueError("classifier_type must be LinearSVC or LogisticRegression")
+    if not np.isfinite(happy_class_weight) or not 0.0 < happy_class_weight <= 20.0:
+        raise ValueError("happy_class_weight must be finite and within (0, 20]")
     if not np.isfinite(window_s) or not np.isfinite(update_interval_s) or window_s <= 0 or update_interval_s <= 0:
         raise ValueError("inference window and update interval must be finite and positive")
     dataset_provenance = None
@@ -202,6 +208,8 @@ def train_linear_models(
             update_interval_s=update_interval_s,
             training_manifest_sha256=hashlib.sha256(Path(manifest_path).read_bytes()).hexdigest(),
             label_mapping=manifest.label_mapping,
+            classifier_type=classifier_type,
+            happy_class_weight=happy_class_weight,
         )
         artifact["training"] = {
             "sample_count": len(train_labels),
@@ -219,6 +227,8 @@ def train_linear_models(
             "reverb_augmentation_enabled": augment_reverb,
             "reverb_augmented_sample_count": reverb_augmented,
             "augmented_rows_by_snr": dict(augmentation_counts),
+            "classifier_type": classifier_type,
+            "happy_class_weight": float(happy_class_weight),
         }
         artifact["window_s"] = float(window_s)
         artifact["update_interval_s"] = float(update_interval_s)
@@ -235,7 +245,7 @@ def train_linear_models(
         model_size = _write_json_atomically(model_path, artifact)
         model_parameter_count = _parameter_count(artifact)
         models[profile] = {
-            "path": str(model_path),
+            "file": filename,
             "model_size_bytes": model_size,
             "parameter_count": model_parameter_count,
             "class_counts": artifact["training"]["class_counts"],
@@ -325,6 +335,8 @@ def _fit_profile(
     update_interval_s: float,
     training_manifest_sha256: str,
     label_mapping: dict[str, str],
+    classifier_type: str,
+    happy_class_weight: float,
 ) -> dict:
     try:
         from sklearn import __version__ as sklearn_version
@@ -343,7 +355,19 @@ def _fit_profile(
     scaler = StandardScaler().fit(train_filled)
     train_scaled = scaler.transform(train_filled)
     validation_scaled = scaler.transform(validation_filled)
-    classifier = LinearSVC(random_state=seed, dual="auto").fit(train_scaled, np.asarray(train_labels))
+    class_weight = {label: (happy_class_weight if label == Emotion.HAPPY.value else 1.0) for label in classes}
+    if classifier_type == "LinearSVC":
+        classifier = LinearSVC(random_state=seed, dual="auto", class_weight=class_weight).fit(
+            train_scaled, np.asarray(train_labels)
+        )
+    else:
+        classifier = LogisticRegression(
+            C=1.0,
+            solver="lbfgs",
+            max_iter=1000,
+            random_state=seed,
+            class_weight=class_weight,
+        ).fit(train_scaled, np.asarray(train_labels))
     if tuple(classifier.classes_) != classes:
         raise RuntimeError("linear model class order changed unexpectedly")
     validation_margins = np.asarray(classifier.decision_function(validation_scaled), dtype=np.float64)
@@ -370,6 +394,14 @@ def _fit_profile(
     )
     threshold, threshold_validation = _select_validation_threshold(validation_labels, validation_probabilities, classes)
     brier, ece = _calibration_diagnostics(validation_labels, validation_probabilities, classes)
+    from emolight.training.evaluate import compute_classification_metrics
+
+    validation_metrics = compute_classification_metrics(
+        validation_labels,
+        validation_probabilities,
+        classes,
+        confidence_threshold=threshold,
+    )
     weights = np.asarray(classifier.coef_, dtype=np.float64)
     if weights.shape != (len(classes), len(names)):
         raise RuntimeError("unexpected linear coefficient shape")
@@ -405,10 +437,13 @@ def _fit_profile(
         "calibration_method": "one-vs-rest sigmoid on independent validation split",
         "training_library": {
             "scikit_learn_version": sklearn_version,
-            "classifier": "LinearSVC",
+            "classifier": classifier_type,
             "C": 1.0,
-            "dual": "auto",
+            "dual": "auto" if classifier_type == "LinearSVC" else None,
+            "solver": "lbfgs" if classifier_type == "LogisticRegression" else None,
+            "max_iter": 1000 if classifier_type == "LogisticRegression" else None,
             "random_state": seed,
+            "class_weight": class_weight,
             "standardization": "training split only",
             "imputation": "per-feature training median; fail if a column has no observations",
         },
@@ -424,6 +459,7 @@ def _fit_profile(
             "threshold_selected_on": "validation",
             "threshold_selection_method": "maximize F1 for validation correctness; ties choose higher threshold",
             "threshold_metrics": threshold_validation,
+            "metrics": validation_metrics,
             "brier_score": brier,
             "ece": ece,
         },
@@ -523,12 +559,25 @@ def _parameter_count(artifact: dict) -> int:
 
 def _without_test_label_counts(metadata: dict) -> dict:
     """Keep held-out label distributions out of the training artifact."""
-    result = dict(metadata)
+    result = _without_speaker_identifier_fields(metadata)
     for field in ("official_gold_class_counts", "split_window_class_counts"):
         value = result.get(field)
         if isinstance(value, dict):
             result[field] = {split: counts for split, counts in value.items() if split != "test"}
     return result
+
+
+def _without_speaker_identifier_fields(value):
+    if isinstance(value, list):
+        return [_without_speaker_identifier_fields(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+    private_keys = {"speaker_id", "speaker_ids", "speaker_name", "speaker_names", "split_speaker_ids", "speaker_ids_by_split", "test_speaker_ids"}
+    return {
+        key: _without_speaker_identifier_fields(item)
+        for key, item in value.items()
+        if key not in private_keys
+    }
 
 
 def _write_json_atomically(path: Path, artifact: dict) -> int:
@@ -563,6 +612,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--window-s", type=float, default=1.5)
     parser.add_argument("--update-interval-s", type=float, default=0.5)
     parser.add_argument("--label-map")
+    parser.add_argument("--classifier", choices=("LinearSVC", "LogisticRegression"), default="LinearSVC")
+    parser.add_argument("--happy-class-weight", type=float, default=1.0)
     args = parser.parse_args(argv)
     try:
         label_map = json.loads(Path(args.label_map).read_text(encoding="utf-8")) if args.label_map else None
@@ -584,8 +635,10 @@ def main(argv: list[str] | None = None) -> int:
             window_s=args.window_s,
             update_interval_s=args.update_interval_s,
             label_map=label_map,
+            classifier_type=args.classifier,
+            happy_class_weight=args.happy_class_weight,
         )
     except (OSError, ValueError, RuntimeError) as error:
-        parser.exit(2, f"train_linear.py: {error}\n")
+        parser.exit(2, f"train_linear.py: operation failed ({type(error).__name__})\n")
     print(json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False))
     return 0

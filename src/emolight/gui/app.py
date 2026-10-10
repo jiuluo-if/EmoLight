@@ -1,6 +1,6 @@
 import time
 import tkinter as tk
-from tkinter import ttk
+from tkinter import messagebox, ttk
 from dataclasses import replace
 
 from emolight.audio.microphone import MicrophoneAudioSource
@@ -42,7 +42,7 @@ class EmotionSimulatorApp:
                     expected_activity_rms_threshold=app_config.audio.activity_rms_threshold,
                 )
             except (OSError, ValueError, RuntimeError) as error:
-                self.model_load_error = str(error)
+                self.model_load_error = type(error).__name__
         audio = app_config.audio
         self.runtime = RealtimeFeatureRuntime(
             sample_rate=audio.sample_rate_hz,
@@ -118,6 +118,12 @@ class EmotionSimulatorApp:
         ttk.Checkbutton(controls, text="夜间模式", variable=self.night, command=self._toggle_night).pack(side="left", padx=(0, 12))
         ttk.Button(controls, text="手动暖白", command=self._manual).pack(side="left")
         ttk.Label(outer, text="安全限制：无闪烁 · 亮度上限 40%（夜间 12%）· 缓慢过渡", foreground="#555").pack(anchor="w", pady=(14, 0))
+        ttk.Label(
+            outer,
+            text="麦克风仅用于本地声学情绪实验；默认不录音、不保存个人情绪历史、不联网。采集真实人声前，请先告知并征得所有可能被录到者同意。",
+            wraplength=580,
+            foreground="#555",
+        ).pack(anchor="w", pady=(8, 0))
 
     def _demo(self, emotion: Emotion) -> None:
         event = make_demo_event(emotion, int(time.time() * 1000))
@@ -165,7 +171,16 @@ class EmotionSimulatorApp:
             self._mic_session_id += 1
             source, self.mic_source = self.mic_source, None
             source.stop()
+            if not getattr(source, "worker_alive", False):
+                self.runtime.clear_audio_cache()
             self._update_recognition_status("已停止")
+            return
+        if not messagebox.askokcancel(
+            "使用麦克风前确认",
+            "麦克风会将声音用于本地声学情绪实验。默认不保存原始音频或个人情绪历史，也不会联网传输。\n\n"
+            "若会采集到其他人的真实人声，请先告知并征得他们同意。继续启动麦克风？",
+            parent=self.root,
+        ):
             return
         source = MicrophoneAudioSource(
             sample_rate=self.runtime.sample_rate,
@@ -178,7 +193,7 @@ class EmotionSimulatorApp:
             source.start(lambda frame: self._process_audio_frame(frame, session_id=session_id))
         except RuntimeError as error:
             self.mic_source = None
-            self._update_recognition_status(f"不可用：{error}")
+            self._update_recognition_status(f"不可用（{type(error).__name__}）")
             return
         self._update_recognition_status("已连接")
 
@@ -245,6 +260,8 @@ class EmotionSimulatorApp:
         if self.mic_source is not None:
             source, self.mic_source = self.mic_source, None
             source.stop()
+            if not getattr(source, "worker_alive", False):
+                self.runtime.clear_audio_cache()
         self.root.destroy()
 
     def _apply(self, command: LightCommand) -> None:

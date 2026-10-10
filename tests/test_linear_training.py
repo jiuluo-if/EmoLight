@@ -85,6 +85,8 @@ def test_training_exports_simple_and_full_numpy_json_models_from_one_split(tmp_p
     assert simple["calibration_status"] == full["calibration_status"] == "CALIBRATED"
     assert report["models"]["simple"]["parameter_count"] > 0
     assert report["models"]["full"]["model_size_bytes"] < 100_000
+    assert report["models"]["simple"]["file"] == "simple.json"
+    assert all("path" not in model for model in report["models"].values())
 
     features = extract_emotion_features(load_wav(tmp_path / "audio" / "speaker-0-happy.wav"))
     simple_predictor = NumpyLinearEmotionPredictor.load(output_dir / "simple.json")
@@ -121,6 +123,7 @@ def test_training_records_dataset_and_live_window_provenance(tmp_path):
         "dataset_id": "test-real-corpus",
         "license": "CC-BY-4.0",
         "split_speaker_ids": {"train": ["a"], "validation": ["b"], "test": ["c"]},
+        "nested_split": {"speaker_ids_by_split": {"train": ["private-id"]}},
         "official_gold_class_counts": {"train": {"happy": 3}, "test": {"happy": 1}},
         "split_window_class_counts": {"train": {"happy": 3}, "test": {"happy": 1}},
         "window_s": 1.5,
@@ -142,6 +145,26 @@ def test_training_records_dataset_and_live_window_provenance(tmp_path):
     assert artifact["update_interval_s"] == 0.5
     assert "test" not in artifact["dataset_provenance"]["official_gold_class_counts"]
     assert "test" not in artifact["dataset_provenance"]["split_window_class_counts"]
+    assert "split_speaker_ids" not in artifact["dataset_provenance"]
+    assert artifact["dataset_provenance"]["nested_split"] == {}
+
+
+def test_optional_happy_weighted_logistic_model_is_validation_calibrated(tmp_path):
+    manifest = make_speaker_exclusive_manifest(tmp_path)
+
+    train_linear_models(
+        manifest,
+        tmp_path / "models",
+        classifier_type="LogisticRegression",
+        happy_class_weight=2.0,
+    )
+
+    artifact = json.loads((tmp_path / "models" / "full.json").read_text(encoding="utf-8"))
+    assert artifact["training_library"]["classifier"] == "LogisticRegression"
+    assert artifact["training_library"]["class_weight"]["happy"] == 2.0
+    assert artifact["validation"]["metrics"]["sample_count"] > 0
+    assert artifact["validation"]["threshold_selected_on"] == "validation"
+    assert NumpyLinearEmotionPredictor.load(tmp_path / "models" / "full.json").model_status.value == "READY"
 
 
 def test_training_refuses_to_invent_zero_for_an_all_missing_pitch_feature():

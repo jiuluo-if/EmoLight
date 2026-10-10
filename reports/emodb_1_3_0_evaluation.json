@@ -49,24 +49,6 @@
         "sadness": 35
       }
     },
-    "split_speaker_ids": {
-      "validation": [
-        "03",
-        "09"
-      ],
-      "train": [
-        "08",
-        "10",
-        "11",
-        "13"
-      ],
-      "test": [
-        "12",
-        "14",
-        "15",
-        "16"
-      ]
-    },
     "split_window_class_counts": {
       "train": {
         "angry": 183,
@@ -91,7 +73,7 @@
   "inference_window_s": 1.5,
   "inference_update_interval_s": 0.5,
   "evaluation_unit": "manifest row; this dataset contains overlapping windows, so rows from one utterance are correlated",
-  "model_size_bytes": 12219,
+  "model_size_bytes": 11949,
   "model_parameter_count": 180,
   "model_validation": {
     "calibration_method": "one-vs-rest sigmoid on independent validation split",
@@ -105,12 +87,7 @@
   "seed": 42,
   "test_record_count": 569,
   "test_unique_recording_count": 136,
-  "test_speaker_ids": [
-    "12",
-    "14",
-    "15",
-    "16"
-  ],
+  "test_speaker_count": 4,
   "test_class_counts": {
     "neutral": 84,
     "happy": 103,
@@ -121,35 +98,35 @@
   "latency_ms": {
     "wav_load": {
       "sample_count": 4552,
-      "median": 0.3101,
-      "p95": 0.509435
+      "median": 0.2219,
+      "p95": 0.29704499999999995
     },
     "quality_and_vad": {
       "sample_count": 4552,
-      "median": 0.5097,
-      "p95": 0.8220749999999997
+      "median": 0.4227,
+      "p95": 0.49092499999999994
     },
     "prosody_feature_extraction": {
       "sample_count": 2036,
-      "median": 9.894950000000001,
-      "p95": 14.482275
+      "median": 8.39035,
+      "p95": 9.45125
     },
     "numpy_model_inference": {
       "sample_count": 2036,
-      "median": 0.07444999999999999,
-      "p95": 0.121225
+      "median": 0.0528,
+      "p95": 0.07085
     },
     "end_to_end_per_test_item": {
       "sample_count": 4552,
-      "median": 1.6062,
-      "p95": 14.760019999999995
+      "median": 1.0235500000000002,
+      "p95": 10.199209999999999
     }
   },
   "resource_usage": {
-    "process_cpu_seconds": 27.46875,
-    "wall_seconds": 27.6707535,
-    "average_cpu_cores_used": 0.992699747045197,
-    "peak_rss_bytes": 153378816
+    "process_cpu_seconds": 25.59375,
+    "wall_seconds": 25.835603,
+    "average_cpu_cores_used": 0.9906387708465717,
+    "peak_rss_bytes": 154021888
   },
   "conditions": {
     "clean": {
@@ -229,6 +206,148 @@
       "rejection_reasons": {
         "UNCERTAIN": 22,
         "BELOW_VALIDATION_THRESHOLD": 5
+      },
+      "recording_aggregated": {
+        "sample_count": 136,
+        "accepted_count": 134,
+        "coverage": 0.9852941176470589,
+        "rejection_rate": 0.014705882352941124,
+        "accepted_error_count": 36,
+        "accepted_error_rate": 0.26865671641791045,
+        "confidence_threshold": 0.4009412215702857,
+        "macro_f1": 0.6080972844754555,
+        "uar": 0.6528619528619528,
+        "per_class": {
+          "angry": {
+            "precision": 0.6835443037974683,
+            "recall": 0.9818181818181818,
+            "support": 55
+          },
+          "happy": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "support": 25
+          },
+          "neutral": {
+            "precision": 0.8333333333333334,
+            "recall": 0.7407407407407407,
+            "support": 27
+          },
+          "sad": {
+            "precision": 0.8,
+            "recall": 0.8888888888888888,
+            "support": 27
+          }
+        },
+        "confusion_matrix_labels": [
+          "angry",
+          "happy",
+          "neutral",
+          "sad"
+        ],
+        "confusion_matrix": [
+          [
+            54,
+            0,
+            1,
+            0
+          ],
+          [
+            24,
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            1,
+            20,
+            6
+          ],
+          [
+            1,
+            0,
+            2,
+            24
+          ]
+        ],
+        "calibration": {
+          "sample_count": 136,
+          "multiclass_brier_score": 0.4029149649097538,
+          "expected_calibration_error": 0.05751895524728772
+        },
+        "unsupported_truth_count": 0
+      },
+      "recording_aggregation_method": "mean calibrated class scores over quality-eligible overlapping windows; reject if every window is ineligible",
+      "recording_bootstrap_95ci": {
+        "unit": "original recording, stratified by true class",
+        "method": "percentile bootstrap with replacement",
+        "resamples": 1000,
+        "confidence_level": 0.95,
+        "seed": 42,
+        "intervals": {
+          "macro_f1": [
+            0.5565822277741402,
+            0.6573771796730389
+          ],
+          "uar": [
+            0.6018518518518519,
+            0.7037037037037037
+          ],
+          "coverage": [
+            0.9632352941176471,
+            1.0
+          ],
+          "accepted_error_rate": [
+            0.22388059701492538,
+            0.3134816303099885
+          ],
+          "recall_angry": [
+            0.9454545454545454,
+            1.0
+          ],
+          "recall_happy": [
+            0.0,
+            0.0
+          ],
+          "recall_neutral": [
+            0.5555555555555556,
+            0.8888888888888888
+          ],
+          "recall_sad": [
+            0.7777777777777778,
+            1.0
+          ]
+        }
+      },
+      "per_speaker_summary": {
+        "speaker_count": 4,
+        "recordings_per_speaker": [
+          22,
+          41
+        ],
+        "metric_ranges": {
+          "macro_f1": [
+            0.5087845622119815,
+            0.6791666666666667
+          ],
+          "uar": [
+            0.6136363636363636,
+            0.7291666666666666
+          ],
+          "happy_recall": [
+            0.0,
+            0.0
+          ],
+          "coverage": [
+            0.9705882352941176,
+            1.0
+          ],
+          "accepted_error_rate": [
+            0.13636363636363635,
+            0.3333333333333333
+          ]
+        }
       }
     },
     "white_noise_20db": {

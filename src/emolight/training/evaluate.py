@@ -105,6 +105,129 @@ def compute_classification_metrics(
     }
 
 
+def _aggregate_recordings(
+    *,
+    labels: Sequence[str],
+    probabilities: np.ndarray,
+    eligible: Sequence[bool],
+    speaker_ids: Sequence[str],
+    recording_keys: Sequence[object],
+) -> dict:
+    """Average usable window scores by original recording, keeping all-rejected recordings rejected."""
+    labels_array = np.asarray(labels, dtype=str)
+    probabilities = np.asarray(probabilities, dtype=np.float64)
+    eligible_array = np.asarray(eligible, dtype=bool)
+    speakers = tuple(str(value) for value in speaker_ids)
+    keys = tuple(recording_keys)
+    count = labels_array.size
+    if probabilities.ndim != 2 or probabilities.shape[0] != count or any(
+        len(values) != count for values in (eligible_array, speakers, keys)
+    ):
+        raise ValueError("recording aggregation inputs must have one row per window")
+    grouped: dict[object, list[int]] = {}
+    for index, key in enumerate(keys):
+        grouped.setdefault(key, []).append(index)
+    aggregated_labels = []
+    aggregated_probabilities = []
+    aggregated_eligible = []
+    aggregated_speakers = []
+    for key, indices in grouped.items():
+        group_labels = {labels_array[index] for index in indices}
+        group_speakers = {speakers[index] for index in indices}
+        if len(group_labels) != 1 or len(group_speakers) != 1:
+            raise ValueError("one source recording must have one label and one speaker")
+        valid_indices = [index for index in indices if eligible_array[index]]
+        aggregated_labels.append(next(iter(group_labels)))
+        aggregated_speakers.append(next(iter(group_speakers)))
+        aggregated_eligible.append(bool(valid_indices))
+        if valid_indices:
+            aggregated_probabilities.append(np.mean(probabilities[valid_indices], axis=0))
+        else:
+            aggregated_probabilities.append(np.full(probabilities.shape[1], 1.0 / probabilities.shape[1]))
+    return {
+        "labels": tuple(aggregated_labels),
+        "probabilities": np.asarray(aggregated_probabilities, dtype=np.float64),
+        "eligible": tuple(aggregated_eligible),
+        "speaker_ids": tuple(aggregated_speakers),
+    }
+
+
+def _recording_bootstrap_intervals(
+    aggregate: dict,
+    classes: Sequence[str],
+    threshold: float,
+    *,
+    seed: int,
+    resamples: int = 1000,
+) -> dict:
+    labels = np.asarray(aggregate["labels"], dtype=str)
+    probabilities = aggregate["probabilities"]
+    eligible = np.asarray(aggregate["eligible"], dtype=bool)
+    strata = [np.flatnonzero(labels == label) for label in sorted(set(labels))]
+    metric_names = ("macro_f1", "uar", "coverage", "accepted_error_rate")
+    recall_names = tuple(f"recall_{label}" for label in classes)
+    samples: dict[str, list[float]] = {key: [] for key in (*metric_names, *recall_names)}
+    generator = np.random.default_rng(seed)
+    for _ in range(resamples):
+        indices = np.concatenate([generator.choice(group, size=len(group), replace=True) for group in strata])
+        metrics = compute_classification_metrics(
+            labels[indices], probabilities[indices], classes,
+            eligible=eligible[indices], confidence_threshold=threshold,
+        )
+        for key in metric_names:
+            value = metrics[key]
+            if value is not None:
+                samples[key].append(float(value))
+        for label, key in zip(classes, recall_names):
+            samples[key].append(float(metrics["per_class"].get(label, {}).get("recall", 0.0)))
+    return {
+        "unit": "original recording, stratified by true class",
+        "method": "percentile bootstrap with replacement",
+        "resamples": resamples,
+        "confidence_level": 0.95,
+        "seed": seed,
+        "intervals": {
+            key: [float(np.quantile(values, 0.025)), float(np.quantile(values, 0.975))] if values else None
+            for key, values in samples.items()
+        },
+    }
+
+
+def _summarize_per_speaker(results: Mapping[str, dict]) -> dict:
+    """Publish cross-speaker metric ranges without exposing dataset speaker keys."""
+    metric_fields = {
+        "macro_f1": lambda value: value.get("macro_f1"),
+        "uar": lambda value: value.get("uar"),
+        "happy_recall": lambda value: value.get("per_class", {}).get("happy", {}).get("recall"),
+        "coverage": lambda value: value.get("coverage"),
+        "accepted_error_rate": lambda value: value.get("accepted_error_rate"),
+    }
+    values = list(results.values())
+    ranges = {}
+    for name, extract in metric_fields.items():
+        observed = [float(value) for result in values if (value := extract(result)) is not None]
+        ranges[name] = [min(observed), max(observed)] if observed else None
+    recording_counts = [int(result["sample_count"]) for result in values]
+    return {
+        "speaker_count": len(values),
+        "recordings_per_speaker": [min(recording_counts), max(recording_counts)] if recording_counts else None,
+        "metric_ranges": ranges,
+    }
+
+
+def _without_public_speaker_identifiers(value):
+    if isinstance(value, list):
+        return [_without_public_speaker_identifiers(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+    private_keys = {"speaker_id", "speaker_ids", "speaker_name", "speaker_names", "split_speaker_ids", "speaker_ids_by_split", "test_speaker_ids"}
+    return {
+        key: _without_public_speaker_identifiers(item)
+        for key, item in value.items()
+        if key not in private_keys
+    }
+
+
 def _calibration_metrics(labels: np.ndarray, probabilities: np.ndarray, classes: tuple[str, ...]) -> dict:
     if labels.size == 0:
         return {"sample_count": 0, "multiclass_brier_score": None, "expected_calibration_error": None}
@@ -223,6 +346,7 @@ def evaluate_manifest(
             "clean", split.test, classes, predictor, rejection_threshold, model,
             lambda record, audio, index: audio.samples,
             load_times, vad_times, feature_times, inference_times, total_times,
+            recording_summary=True,
         )
         for snr_db in noise_snr_db:
             condition_name = f"white_noise_{snr_db:g}db"
@@ -280,6 +404,7 @@ def evaluate_manifest(
     cpu_seconds = (cpu_after.user - cpu_before.user) + (cpu_after.system - cpu_before.system)
     test_split_summary = split.to_metadata()["subsets"]["test"]
     dataset_provenance = model.get("dataset_provenance", {})
+    dataset_provenance = _without_public_speaker_identifiers(dataset_provenance)
     parameter_count = _model_parameter_count(model)
     return {
         "status": "EVALUATED_USER_ATTESTED_LABELED_DATA",
@@ -307,7 +432,7 @@ def evaluate_manifest(
         "seed": selected_seed,
         "test_record_count": len(split.test),
         "test_unique_recording_count": len({(record.dataset_id, record.recording_id) for record in split.test}),
-        "test_speaker_ids": sorted({record.speaker_id for record in split.test}),
+        "test_speaker_count": len({record.speaker_id for record in split.test}),
         "test_class_counts": test_split_summary["class_counts"],
         "test_missing_classes": test_split_summary["missing_classes"],
         "latency_ms": {
@@ -381,15 +506,20 @@ def _evaluate_condition(
     feature_times: list[float],
     inference_times: list[float],
     total_times: list[float],
+    recording_summary: bool = False,
     **metadata,
 ) -> dict:
     labels: list[str] = []
     probabilities: list[list[float]] = []
     eligible: list[bool] = []
+    speaker_ids: list[str] = []
+    recording_keys: list[tuple[str, str]] = []
     rejects: Counter[str] = Counter()
     for index, record in enumerate(records):
         total_started = time.perf_counter_ns()
         labels.append(record.emotion.value)
+        speaker_ids.append(record.speaker_id)
+        recording_keys.append((record.dataset_id, record.recording_id))
         load_started = time.perf_counter_ns()
         audio = load_wav(record.path)
         load_times.append((time.perf_counter_ns() - load_started) / 1e6)
@@ -463,7 +593,36 @@ def _evaluate_condition(
         eligible=eligible,
         confidence_threshold=threshold,
     )
-    return {"status": "EVALUATED", "metadata": metadata, "metrics": metrics, "rejection_reasons": dict(rejects)}
+    result = {"status": "EVALUATED", "metadata": metadata, "metrics": metrics, "rejection_reasons": dict(rejects)}
+    if recording_summary and labels:
+        aggregate = _aggregate_recordings(
+            labels=labels,
+            probabilities=np.asarray(probabilities, dtype=np.float64),
+            eligible=eligible,
+            speaker_ids=speaker_ids,
+            recording_keys=recording_keys,
+        )
+        result["recording_aggregated"] = compute_classification_metrics(
+            aggregate["labels"], aggregate["probabilities"], classes,
+            eligible=aggregate["eligible"], confidence_threshold=threshold,
+        )
+        result["recording_aggregation_method"] = "mean calibrated class scores over quality-eligible overlapping windows; reject if every window is ineligible"
+        result["recording_bootstrap_95ci"] = _recording_bootstrap_intervals(
+            aggregate, classes, threshold, seed=int(model.get("dataset_split", {}).get("seed", 42))
+        )
+        per_speaker = {}
+        aggregate_speakers = np.asarray(aggregate["speaker_ids"], dtype=str)
+        for speaker_id in sorted(set(aggregate["speaker_ids"])):
+            indices = np.flatnonzero(aggregate_speakers == speaker_id)
+            per_speaker[speaker_id] = compute_classification_metrics(
+                np.asarray(aggregate["labels"])[indices],
+                aggregate["probabilities"][indices],
+                classes,
+                eligible=np.asarray(aggregate["eligible"], dtype=bool)[indices],
+                confidence_threshold=threshold,
+            )
+        result["per_speaker_summary"] = _summarize_per_speaker(per_speaker)
+    return result
 
 
 def _mix_background_source(target: AudioBuffer, background: AudioBuffer, snr_db: float) -> np.ndarray:
@@ -550,14 +709,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             "confirm_real_labeled_data": args.confirm_real_labeled_data,
             "seed": args.seed,
             "label_map": label_map,
-            "noise_manifest_path": args.noise_manifest,
         }
         if args.model:
             result = evaluate_manifest(args.manifest, args.model, **options)
         else:
             result = evaluate_model_pair(args.manifest, args.simple_model, args.full_model, **options)
     except (OSError, ValueError, RuntimeError) as error:
-        parser.exit(2, f"evaluate_linear.py: {error}\n")
+        parser.exit(2, f"evaluate_linear.py: operation failed ({type(error).__name__})\n")
     output = json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False)
     if args.output:
         Path(args.output).write_text(output + "\n", encoding="utf-8")

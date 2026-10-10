@@ -93,6 +93,11 @@ def test_preparation_preserves_official_test_speakers_and_emits_fixed_windows(tm
     assert {record.emotion.value for record in manifest.records} == {"neutral", "happy", "angry", "sad"}
     assert report["ignored_emotion_counts"] == {"fear": 6}
     assert report["window_count"] == len(manifest.records) == 80
+    assert report["manifest_file"] == "emodb_manifest.csv"
+    assert report["metadata_file"] == "dataset_metadata.json"
+    assert "manifest_path" not in report and "metadata_path" not in report
+    assert report["speaker_counts_by_split"] == {key: len(value) for key, value in speaker_sets.items()}
+    assert "speaker_ids_by_split" not in report
     assert all(record.recording_id.startswith(record.speaker_id) for record in manifest.records)
     assert all(record.augmentation_group_id for record in manifest.records)
 

@@ -78,3 +78,18 @@ def test_experimental_runtime_rejects_silence_and_strong_noise_before_classifica
     assert rejected_noise.rejection_reason == "UNCERTAIN_AUDIO_QUALITY"
     assert rejected_noise.emotion is None
     assert predictor.calls == 0
+
+
+def test_experimental_runtime_clears_audio_and_label_cache():
+    runtime = EmotionOnlyExperimentalRuntime(SequencePredictor(()))
+    runtime.buffer.append(np.ones(32, dtype=np.float32))
+    runtime._recent_labels.append(Emotion.HAPPY)
+    runtime._smoothed_emotion = Emotion.HAPPY
+    runtime._last_update_ms = 100
+
+    runtime.clear_audio_cache()
+
+    assert runtime.buffer.size == 0
+    assert not runtime._recent_labels
+    assert runtime._smoothed_emotion is None
+    assert runtime._last_update_ms is None

@@ -14,6 +14,17 @@ def test_ring_buffer_keeps_only_latest_samples_in_chronological_order():
     assert buffer.snapshot().tolist() == [2, 3, 4, 5, 6]
 
 
+def test_ring_buffer_clear_erases_samples_and_resets_size():
+    buffer = AudioRingBuffer(capacity_samples=5)
+    buffer.append(np.array([0.1, 0.2, 0.3], dtype=np.float32))
+
+    buffer.clear()
+
+    assert buffer.size == 0
+    assert buffer.snapshot().tolist() == []
+    assert np.count_nonzero(buffer._data) == 0
+
+
 def test_realtime_features_use_bounded_window_and_emit_not_configured():
     runtime = RealtimeFeatureRuntime(sample_rate=1000, window_s=1, update_interval_s=0.5)
     background = np.full(250, 0.001, dtype=np.float32)
@@ -80,3 +91,16 @@ def test_runtime_snapshot_keeps_audio_quality_and_event_on_the_same_window():
     assert snapshot.event.audio_quality == snapshot.acoustic_features.audio_quality
     assert snapshot.prosody_features.frame_ms == 20.0
     assert snapshot.prosody_features.hop_ms == 5.0
+
+
+def test_realtime_runtime_clears_window_and_cached_features():
+    runtime = RealtimeFeatureRuntime(sample_rate=1000, window_s=1, update_interval_s=0.5)
+    runtime.buffer.append(np.ones(100, dtype=np.float32))
+    runtime._last_update_ms = 100
+
+    runtime.clear_audio_cache()
+
+    assert runtime.buffer.size == 0
+    assert runtime._last_update_ms is None
+    assert runtime.latest_features is None
+    assert runtime.latest_prosody is None

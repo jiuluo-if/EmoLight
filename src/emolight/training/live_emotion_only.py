@@ -1,8 +1,10 @@
 """CPU-only live or WAV-replay emotion predictions with an explicit experimental mode."""
 
 import argparse
+from collections import deque
 import json
 from pathlib import Path
+import queue
 import sys
 import threading
 import time
@@ -16,6 +18,48 @@ from emolight.emotion.linear import NumpyLinearEmotionPredictor
 from emolight.emotion.predictor import ModelStatus
 from emolight.events import Emotion
 from emolight.runtime.experimental import EmotionOnlyExperimentalRuntime
+
+
+class LatencySamples:
+    """Keep a rolling latency sample window while counting the full session."""
+
+    def __init__(self, capacity: int = 4096) -> None:
+        if type(capacity) is not int or capacity <= 0:
+            raise ValueError("latency sample capacity must be a positive integer")
+        self._values: deque[float] = deque(maxlen=capacity)
+        self.sample_count = 0
+
+    def add(self, value: float) -> None:
+        measured = float(value)
+        if not np.isfinite(measured) or measured < 0:
+            raise ValueError("latency samples must be finite and non-negative")
+        self._values.append(measured)
+        self.sample_count += 1
+
+    @property
+    def retained_sample_count(self) -> int:
+        return len(self._values)
+
+    @property
+    def values(self) -> tuple[float, ...]:
+        return tuple(self._values)
+
+
+def _publish_latest(results: queue.Queue, value) -> bool:
+    """Publish without waiting; return true when an older display update was replaced."""
+    try:
+        results.put_nowait(value)
+        return False
+    except queue.Full:
+        try:
+            results.get_nowait()
+        except queue.Empty:
+            pass
+        try:
+            results.put_nowait(value)
+        except queue.Full:
+            return True
+        return True
 
 
 def replay_wav(
@@ -33,8 +77,8 @@ def replay_wav(
         raise ValueError(f"WAV sample rate mismatch: expected {runtime.sample_rate}, got {audio.sample_rate}")
     block_samples = max(1, round(audio.sample_rate * frame_ms / 1000.0))
     results = []
-    frame_processing_ms: list[float] = []
-    result_processing_ms: list[float] = []
+    frame_processing_ms = LatencySamples()
+    result_processing_ms = LatencySamples()
     process = _try_process()
     cpu_before = process.cpu_times() if process else None
     peak_rss = process.memory_info().rss if process else None
@@ -46,10 +90,10 @@ def replay_wav(
         frame_started = time.perf_counter_ns()
         result = runtime.feed(chunk, timestamp_ms)
         elapsed_ms = (time.perf_counter_ns() - frame_started) / 1e6
-        frame_processing_ms.append(elapsed_ms)
+        frame_processing_ms.add(elapsed_ms)
         if result is not None:
             results.append(result)
-            result_processing_ms.append(elapsed_ms)
+            result_processing_ms.add(elapsed_ms)
         if process:
             rss = process.memory_info().rss
             peak_rss = max(peak_rss or rss, rss)
@@ -65,7 +109,7 @@ def replay_wav(
         "identity_status": "NOT_EVALUATED",
         "audio_duration_s": audio.duration_s,
         "capture_frame_ms": frame_ms,
-        "capture_frame_count": len(frame_processing_ms),
+        "capture_frame_count": frame_processing_ms.sample_count,
         "window_updates": len(results),
         "processing_ms": {
             "per_capture_frame": _latency(frame_processing_ms),
@@ -88,11 +132,15 @@ def _try_process():
         return None
 
 
-def _latency(values: list[float]) -> dict:
+def _latency(values: LatencySamples) -> dict:
+    retained = values.values
+    median = float(np.median(retained)) if retained else None
     return {
-        "sample_count": len(values),
-        "median": float(np.median(values)) if values else None,
-        "p95": float(np.quantile(values, 0.95)) if values else None,
+        "sample_count": values.sample_count,
+        "retained_sample_count": values.retained_sample_count,
+        "median": median,
+        "p50": median,
+        "p95": float(np.quantile(retained, 0.95)) if retained else None,
     }
 
 
@@ -102,6 +150,19 @@ def _parameter_count(artifact: dict) -> int:
         "calibration_slopes", "calibration_intercepts",
     )
     return sum(int(np.asarray(artifact[key]).size) for key in keys)
+
+
+def _display_provenance(provenance):
+    if isinstance(provenance, list):
+        return [_display_provenance(item) for item in provenance]
+    if not isinstance(provenance, dict):
+        return provenance
+    private_keys = {"split_speaker_ids", "speaker_ids_by_split", "test_speaker_ids"}
+    return {
+        key: _display_provenance(value)
+        for key, value in provenance.items()
+        if key not in private_keys
+    }
 
 
 def _result_payload(result) -> dict:
@@ -160,8 +221,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             "model_version": artifact["model_version"],
             "model_size_bytes": predictor.model_size_bytes,
             "parameter_count": _parameter_count(artifact),
-            "dataset_provenance": artifact.get("dataset_provenance"),
+            "dataset_provenance": _display_provenance(artifact.get("dataset_provenance")),
             "warning": "Predictions describe audio only; they are not attributed to a named person and cannot trigger real lighting.",
+            "microphone_privacy": "Microphone audio is processed locally for acoustic analysis; raw audio and personal emotion history are not saved, and audio is not sent over a network. Obtain consent from everyone whose voice may be captured.",
         }, ensure_ascii=False, allow_nan=False))
         if args.wav:
             results, summary = replay_wav(args.wav, runtime, frame_ms=args.frame_ms, pace=args.pace)
@@ -171,7 +233,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
         return _run_microphone(runtime, predictor, args.frame_ms, args.duration_s)
     except (OSError, ValueError, RuntimeError) as error:
-        print(f"live_emotion_only.py: {error}", file=sys.stderr)
+        print(f"live_emotion_only.py: operation failed ({type(error).__name__})", file=sys.stderr)
         return 2
 
 
@@ -180,35 +242,52 @@ def _run_microphone(runtime, predictor, frame_ms: int, duration_s: float | None)
         raise ValueError("duration must be finite and positive")
     source = MicrophoneAudioSource(sample_rate=runtime.sample_rate, frame_ms=frame_ms)
     lock = threading.Lock()
-    processing_ms: list[float] = []
-    window_processing_ms: list[float] = []
+    display_results: queue.Queue[dict] = queue.Queue(maxsize=1)
+    processing_ms = LatencySamples()
+    window_processing_ms = LatencySamples()
+    display_dropped_updates = 0
     peak_rss = None
     process = _try_process()
     cpu_before = process.cpu_times() if process else None
     started = time.perf_counter()
 
     def on_audio(frame) -> None:
-        nonlocal peak_rss
+        nonlocal peak_rss, display_dropped_updates
         began = time.perf_counter_ns()
         result = runtime.feed(frame.samples, frame.timestamp_ms)
         elapsed = (time.perf_counter_ns() - began) / 1e6
         with lock:
-            processing_ms.append(elapsed)
+            processing_ms.add(elapsed)
             if process:
                 rss = process.memory_info().rss
                 peak_rss = max(peak_rss or rss, rss)
             if result is not None:
-                window_processing_ms.append(elapsed)
-                print(json.dumps(_result_payload(result), ensure_ascii=False, allow_nan=False), flush=True)
+                window_processing_ms.add(elapsed)
+                if _publish_latest(display_results, _result_payload(result)):
+                    display_dropped_updates += 1
 
     try:
         source.start(on_audio)
         while duration_s is None or time.perf_counter() - started < duration_s:
+            try:
+                payload = display_results.get_nowait()
+            except queue.Empty:
+                pass
+            else:
+                print(json.dumps(payload, ensure_ascii=False, allow_nan=False), flush=True)
             time.sleep(0.1)
     except KeyboardInterrupt:
         pass
     finally:
         source.stop()
+        if not source.worker_alive:
+            runtime.clear_audio_cache()
+    try:
+        payload = display_results.get_nowait()
+    except queue.Empty:
+        pass
+    else:
+        print(json.dumps(payload, ensure_ascii=False, allow_nan=False), flush=True)
     wall_seconds = time.perf_counter() - started
     cpu_seconds = None
     if process and cpu_before:
@@ -219,6 +298,7 @@ def _run_microphone(runtime, predictor, frame_ms: int, duration_s: float | None)
         "mode": "MICROPHONE_EMOTION_ONLY_EXPERIMENTAL",
         "identity_status": "NOT_EVALUATED",
         "audio_queue_dropped_frames": source.dropped_frames,
+        "display_dropped_updates": display_dropped_updates,
         "processing_ms_per_capture_frame": _latency(processing_ms),
         "processing_ms_per_window_update": _latency(window_processing_ms),
         "process_cpu_seconds": cpu_seconds,

@@ -102,6 +102,13 @@ class EmotionOnlyExperimentalRuntime:
         self._recent_labels: deque[Emotion] = deque(maxlen=3)
         self._smoothed_emotion: Emotion | None = None
 
+    def clear_audio_cache(self) -> None:
+        """Erase the rolling audio window and short-lived label smoothing state."""
+        self.buffer.clear()
+        self._last_update_ms = None
+        self._recent_labels.clear()
+        self._smoothed_emotion = None
+
     def feed(self, samples: np.ndarray, timestamp_ms: int) -> EmotionOnlyResult | None:
         values = np.asarray(samples, dtype=np.float32)
         if values.ndim != 1:

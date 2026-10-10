@@ -29,6 +29,10 @@ class MicrophoneAudioSource:
         self.dropped_frames = 0
         self.last_error: str | None = None
 
+    @property
+    def worker_alive(self) -> bool:
+        return self._worker is not None and self._worker.is_alive()
+
     def start(self, on_audio: Callable[[CapturedAudioFrame], None]) -> None:
         if self._running:
             return
@@ -45,7 +49,7 @@ class MicrophoneAudioSource:
 
         def enqueue(indata, frames, time_info, status) -> None:
             if status:
-                self.last_error = str(status)
+                self.last_error = "audio callback warning"
             captured = CapturedAudioFrame(
                 samples=indata[:, 0].copy(),
                 timestamp_ms=round(time.monotonic() * 1000),
@@ -80,7 +84,7 @@ class MicrophoneAudioSource:
             self._worker.join(timeout=1.0)
             if self._worker.is_alive():
                 self.last_error = "microphone worker did not stop after stream startup failed"
-            raise RuntimeError(f"cannot start microphone: {error}") from error
+            raise RuntimeError(f"cannot start microphone ({type(error).__name__})") from error
 
     def stop(self) -> None:
         stream, self._stream = self._stream, None
@@ -91,7 +95,7 @@ class MicrophoneAudioSource:
                 finally:
                     stream.close()
         except Exception as error:
-            self.last_error = str(error)
+            self.last_error = type(error).__name__
         finally:
             self._running = False
             while True:
@@ -114,4 +118,4 @@ class MicrophoneAudioSource:
             try:
                 on_audio(frame)
             except Exception as error:
-                self.last_error = str(error)
+                self.last_error = type(error).__name__

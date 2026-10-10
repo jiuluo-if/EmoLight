@@ -1,6 +1,6 @@
 # 情绪模型
 
-`emodb_four_class.json` 是用真实 Berlin EmoDB 1.3.0 训练、由独立 validation speakers 校准的 24 维 LinearSVC + NumPy 推理模型。它包含四类参数、训练集标准化/缺失值填补、validation 校准器/拒识阈值、窗口协议和数据来源。模型为 12,219 bytes、180 个参数；运行时只需 NumPy。训练与 held-out 结果见 [`reports/emodb_1_3_0_baseline.md`](../reports/emodb_1_3_0_baseline.md) 和 JSON 报告。
+`emodb_four_class.json` 是用真实 Berlin EmoDB 1.3.0 训练、由独立 validation speakers 校准的 24 维 LinearSVC + NumPy 推理模型。它包含四类参数、训练集标准化/缺失值填补、validation 校准器/拒识阈值、窗口协议和数据来源。模型为 11,949 bytes、180 个参数；运行时只需 NumPy。公开元数据只保留数据来源和汇总划分信息，不列出语料 speaker 标识。训练与 held-out 结果见 [`reports/emodb_1_3_0_baseline.md`](../reports/emodb_1_3_0_baseline.md) 和 JSON 报告。
 
 ## 实验边界
 

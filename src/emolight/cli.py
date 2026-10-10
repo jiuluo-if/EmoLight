@@ -48,7 +48,7 @@ def run(argv: Sequence[str] | None = None) -> int:
     try:
         app_config = load_app_config(args.config) if args.config else AppConfig()
     except (OSError, ValueError, json.JSONDecodeError) as error:
-        print(f"emolight: cannot read config: {error}", file=sys.stderr)
+        print(f"emolight: cannot read config ({type(error).__name__})", file=sys.stderr)
         return 2
     policy = EmotionLightingPolicy(app_config.lighting)
     acoustic_features = None
@@ -57,7 +57,7 @@ def run(argv: Sequence[str] | None = None) -> int:
         try:
             audio = load_wav(args.wav)
         except (OSError, ValueError, EOFError) as error:
-            print(f"emolight: cannot analyze WAV: {error}", file=sys.stderr)
+            print(f"emolight: cannot analyze WAV ({type(error).__name__})", file=sys.stderr)
             return 2
         audio_config = app_config.audio
         if audio.sample_rate != audio_config.sample_rate_hz:
@@ -134,7 +134,7 @@ def run(argv: Sequence[str] | None = None) -> int:
                 audio = load_wav(args.wav)
                 acoustic_features = _extract_configured_features(audio, app_config.audio)
             except (OSError, ValueError, EOFError) as error:
-                print(f"emolight: cannot read WAV: {error}", file=sys.stderr)
+                print(f"emolight: cannot read WAV ({type(error).__name__})", file=sys.stderr)
                 return 2
             event = UnconfiguredEmotionPredictor().predict(acoustic_features, int(time.time() * 1000))
         else:

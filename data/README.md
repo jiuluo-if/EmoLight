@@ -12,7 +12,7 @@ python scripts/prepare_emodb.py --download --output-dir data/private/emodb-1.3.0
 # 或：python scripts/prepare_emodb.py --archive <本地 emodb.zip> --output-dir data/private/emodb-1.3.0/prepared
 ```
 
-官方文件名情绪代码映射为 `N=neutral`、`F=happy`、`W=angry`、`T=sad`。`A` 表示 fear，明确排除，不会映射成 angry；本实验只保留四类 gold labels。原官方 gold test speakers 12、14、15、16 保留作最终测试；只从官方 train speakers 中选两人用于 validation，其余四人用于训练。每条语句生成相同定义的 1.5 秒窗口，步长 0.5 秒；同语句所有窗口保持相同 `recording_id` 和增强组，绝不跨集合。
+官方文件名情绪代码映射为 `N=neutral`、`F=happy`、`W=angry`、`T=sad`。`A` 表示 fear，明确排除，不会映射成 angry；本实验只保留四类 gold labels。官方 held-out test speakers 全程隔离；validation 从官方 training speakers 中独立选择两人，其余用于训练。公开结果只包含汇总统计，不列出个人或语料 speaker 标识。每条语句生成相同定义的 1.5 秒窗口，步长 0.5 秒；同语句所有窗口保持相同 `recording_id` 和增强组，绝不跨集合。
 
 Zenodo 记录元数据列出 CC BY 4.0，而 zip 内 audformat metadata 写 CC0-1.0。模型 provenance 为保守起见按 Zenodo record 的 CC BY 4.0 标注，并保留数据集作者署名。该录音集是德语表演情绪语音，不能据此推断普通话、自然对话或真实噪声环境表现。
 

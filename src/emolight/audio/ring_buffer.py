@@ -40,3 +40,9 @@ class AudioRingBuffer:
         if end <= self.capacity:
             return self._data[start:end].copy()
         return np.concatenate((self._data[start:], self._data[:end % self.capacity]))
+
+    def clear(self) -> None:
+        """Overwrite retained samples and reset the logical window."""
+        self._data.fill(0.0)
+        self._write_index = 0
+        self._size = 0

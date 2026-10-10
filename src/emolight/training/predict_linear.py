@@ -53,7 +53,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             activity_rms_threshold=audio_config.activity_rms_threshold,
         )
     except (OSError, ValueError, EOFError) as error:
-        parser.exit(2, f"predict_linear.py: {error}\n")
+        parser.exit(2, f"predict_linear.py: operation failed ({type(error).__name__})\n")
 
     if acoustic.quality_status is AudioQualityStatus.ACCEPTABLE:
         prediction = predictor.predict(features, timestamp_ms=int(time.time() * 1000))

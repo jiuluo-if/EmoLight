@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 import csv
 
-from emolight.training.evaluate import compute_classification_metrics, evaluate_manifest, evaluate_model_pair
+from emolight.training.evaluate import _aggregate_recordings, _recording_bootstrap_intervals, _summarize_per_speaker, _without_public_speaker_identifiers, compute_classification_metrics, evaluate_manifest, evaluate_model_pair
 
 
 def test_metrics_report_macro_f1_uar_precision_recall_calibration_and_confusion():
@@ -69,6 +69,46 @@ def test_metrics_report_coverage_and_error_rate_after_rejections():
     assert result["rejection_rate"] == pytest.approx(0.25)
     assert result["accepted_error_count"] == 1
     assert result["accepted_error_rate"] == pytest.approx(1.0 / 3.0)
+
+
+def test_recording_aggregation_averages_only_quality_eligible_windows():
+    result = _aggregate_recordings(
+        labels=("happy", "happy", "sad"),
+        probabilities=np.asarray([[0.8, 0.2], [0.1, 0.9], [0.1, 0.9]]),
+        eligible=(True, False, False),
+        speaker_ids=("s1", "s1", "s2"),
+        recording_keys=("r1", "r1", "r2"),
+    )
+
+    assert result["labels"] == ("happy", "sad")
+    assert result["probabilities"].tolist() == [[0.8, 0.2], [0.5, 0.5]]
+    assert result["eligible"] == (True, False)
+    assert result["speaker_ids"] == ("s1", "s2")
+    intervals = _recording_bootstrap_intervals(
+        result, ("happy", "sad"), 0.5, seed=42, resamples=100
+    )
+    assert intervals["intervals"]["recall_happy"] is not None
+
+
+def test_public_speaker_summary_reports_ranges_without_speaker_keys():
+    summary = _summarize_per_speaker({
+        "private-speaker-a": {"sample_count": 3, "macro_f1": 0.4, "uar": 0.5, "coverage": 1.0, "accepted_error_rate": 0.2, "per_class": {"happy": {"recall": 0.0}}},
+        "private-speaker-b": {"sample_count": 5, "macro_f1": 0.8, "uar": 0.9, "coverage": 0.8, "accepted_error_rate": 0.1, "per_class": {"happy": {"recall": 0.5}}},
+    })
+
+    assert summary["speaker_count"] == 2
+    assert summary["metric_ranges"]["happy_recall"] == [0.0, 0.5]
+    assert "private-speaker-a" not in repr(summary)
+    assert "private-speaker-b" not in repr(summary)
+
+
+def test_public_provenance_removes_nested_speaker_identifier_fields():
+    result = _without_public_speaker_identifiers({
+        "dataset_id": "example",
+        "split": {"split_speaker_ids": {"train": ["private-id"]}},
+    })
+
+    assert result == {"dataset_id": "example", "split": {}}
 
 
 def test_evaluator_withholds_metrics_without_real_data_attestation(tmp_path):

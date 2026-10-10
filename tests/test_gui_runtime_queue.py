@@ -139,3 +139,42 @@ def test_gui_status_explains_unavailable_speaker_adapter_and_emotion_model():
     assert "目标身份：NOT_CONFIGURED" in app.status.text
     assert "声纹适配器尚未接入" in app.status.text
     assert "情绪模型：INVALID（模型加载失败）" in app.status.text
+
+
+def test_microphone_start_requires_explicit_local_privacy_consent(monkeypatch):
+    import emolight.gui.app as gui
+
+    app = EmotionSimulatorApp.__new__(EmotionSimulatorApp)
+    app.mic_source = None
+    app.root = object()
+    app.config = type("Config", (), {"audio": type("Audio", (), {"sample_rate_hz": 16000, "capture_frame_ms": 20})()})()
+    app.runtime = StubRuntime(None)
+    app._update_recognition_status = lambda status: None
+    created = []
+    monkeypatch.setattr(gui.messagebox, "askokcancel", lambda *args, **kwargs: False)
+    monkeypatch.setattr(gui, "MicrophoneAudioSource", lambda **kwargs: created.append(kwargs))
+
+    app._toggle_microphone()
+
+    assert app.mic_source is None
+    assert created == []
+
+
+def test_stopping_microphone_clears_the_runtime_audio_window():
+    app = EmotionSimulatorApp.__new__(EmotionSimulatorApp)
+    cleared = []
+
+    class Source:
+        def stop(self):
+            pass
+
+    app.mic_source = Source()
+    app._mic_session_id = 4
+    app.runtime = StubRuntime(None)
+    app.runtime.clear_audio_cache = lambda: cleared.append(True)
+    app._update_recognition_status = lambda status: None
+
+    app._toggle_microphone()
+
+    assert app.mic_source is None
+    assert cleared == [True]

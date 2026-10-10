@@ -433,24 +433,6 @@
         "sadness": 35
       }
     },
-    "split_speaker_ids": {
-      "validation": [
-        "03",
-        "09"
-      ],
-      "train": [
-        "08",
-        "10",
-        "11",
-        "13"
-      ],
-      "test": [
-        "12",
-        "14",
-        "15",
-        "16"
-      ]
-    },
     "split_window_class_counts": {
       "train": {
         "angry": 183,
