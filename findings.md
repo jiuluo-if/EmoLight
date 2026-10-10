@@ -8,10 +8,15 @@
 - 灯光默认无闪烁、亮度上限约 40%、过渡至少 1.5 秒、手动优先。
 
 ## Research Findings
-- 工作区 `F:\codex\emotion` 起初是空目录；现已建立独立 EmoLight Python 项目和 `main` 初始分支。
-- 已有相关 EmotiScreen 记忆属于另一目录和另一产品流程，不适合作为此 EmoLight 项目的代码或能力证明。
-- Git 邮箱已配置为 `2966684515@qq.com`；GitHub CLI 登录账号为 `jiuluo-if`；没有同名 EmoLight repository。
-- 已创建私有 `jiuluo-if/EmoLight` 并把实现提交推送到 `main`；推前后 SHA 已核对一致。
+- 当前工作位于 `feat/real-emotion-mvp` 隔离 worktree，基于 main 提交 `5dce973`。
+- 新阶段开始时 main 工作区清洁，原测试基线 22 passed；身份门控审计问题确实仍存在。
+- `data/` 只有许可说明，没有可用于真实性能评估的标注数据；`models/` 没有模型权重。
+- GitHub CLI keyring token 状态无效，但 Git Credential Manager 成功推送任务分支 `124a340`；远端只读读取偶有连接中断，需继续核对 SHA。
+- 身份门控修复后，全量测试为 30 passed；假 happy 预测器仅在 verifier 可信返回 TARGET_ACTIVE 后才会被调用，EmotionPrediction 不能编码 speaker/VAD 状态。
+- `prosody-v1` 特征和独立音频质量测试已通过；持续高响度噪声但没有非活动噪声参考会留在 UNCERTAIN，不能由 RMS 单独给高质量。
+- 新增本地 manifest、speaker/recording 连通组划分、校准线性 SVM 与 emotion-only 评估；`UNCERTAIN`/`LOW_QUALITY` 窗口不进入训练或评测的可用样本，避免训练与部署门控不一致。
+- 评审校正：RMS 差分/斜率索引已与发布的特征名对齐；模型元数据现包含活动阈值并在配置、训练和推理中校验；测试集中出现模型未训练的情绪类时，指标明确统计其支持数和零召回，而不是中止评测。
+- `joblib` 加载使用 pickle 语义，只应加载本地可信训练产物；仓库无模型文件，文档已保留该信任边界。没有做非可信第三方模型反序列化测试。
 
 ## Technical Decisions
 | Decision | Rationale |
@@ -24,6 +29,13 @@
 | 当前使用能量门限 VAD 与未配置 speaker/emotion adapters | 保留可替换契约，模型通过验证前 fail-closed |
 | 第一版 GUI 展示模拟状态、灯带、自动/夜间/手动控制 | 确保无麦克风和硬件也能完整运行 |
 | 用户颜色、亮度限制和过渡时长从 JSON 读取 | 允许按个人舒适度调整，同时校验频闪、RGB 和过渡安全条件 |
+| 新增独立 `EmotionPrediction`；runtime 只在 SpeakerVerifier 可信后包装为 TARGET_ACTIVE | 分类分数不能代替身份验证；旧 `UnconfiguredEmotionPredictor` 兼容层可保留 |
+| 使用有 schema/采样元数据的固定 32 维 prosody-v1 向量 | 训练和推理共享特征实现，并可拒绝不匹配模型 |
+| 训练产物记录类别顺序、schema、采样参数、划分摘要和版本 | 防止运行时加载含义不一致或数据泄漏模型 |
+| 音频质量状态由活动帧、连续活动、削波和有静音噪声参考时的前景/底噪能量差共同判断 | 没有可用底噪参考时标记 UNCERTAIN；`audio_quality` 不再随 RMS 增大而变成高质量 |
+| 运行时由单一 `AcousticFeatures` 窗口快照提供活动比例、连续帧及质量门控 | 避免并行 VAD 与质量计算因窗口错位而产生不一致判断 |
+| 训练仅接受 `ACCEPTABLE` 音频，评测对不合格/不确定输入计算拒识率 | 训练样本与实际可输出预测的质量域一致，报告不把不确定窗口当作可识别样本 |
+| 模型元数据固定活动 RMS 阈值，训练与推理共享完整 `prosody-v1` 参数 | 阈值会改变活动/停顿特征；只比较采样率和帧长不足以保证特征列含义相同 |
 
 ## Issues Encountered
 | Issue | Resolution |
@@ -32,4 +44,23 @@
 | 安装后的 `emolight.exe` 曾报 `cannot import name 'main'` | 增加项目入口 `main()` 并通过入口回归测试和命令验证 |
 
 ## Resources
-- 用户附件：`C:\Users\联想\.codex\attachments\04062e8e-1b33-43fb-bc0f-c52ab5e6918d\pasted-text-1.txt`
+- 规格来源：本轮用户提供的 EmoLight 下一阶段目标；仓库文档不保留个人本地附件路径。
+
+## Phase 3 Audit Findings
+- `origin/main`=`64897c85ecd07a2ab1b1ac1504e59412eec10da6`，匹配用户给定 HEAD。新分支 `feat/phase3-reliability-baselines` 从已推送实现分支切出；共同祖先包含该 main SHA，不会合并 main。
+- 检索附件及 `F:\codex` 未找到 `EmoLight_emotion_phase2.patch`。当前没有 `src/emolight/emotion/linear.py`、`scripts/train_linear.py` 或 `scripts/predict_linear.py`；现有为 32 维 prosody + scikit-learn joblib，与要求的 24 维 NumPy 部署接口不等价。
+- 新 24 维 extractor 现定义：帧覆盖不足 80%或含 NaN/Inf 即无效；`valid_frame_fraction` 汇总有效分析帧；能量 `active_fraction`、周期性 `mean_periodicity`、F0 `f0_valid_fraction` 明确分开。未检出可靠 F0/HNR 的列保持 NaN，simple/full 两路径均共享训练数据拟合的 imputation。已有程序测试覆盖静音、纯音、低幅男女音域、白噪声和 20/10/5/0 dB 合成噪声的数值行为；非语义特征仍不等同于已确认语音或目标人。
+- new `LinearSVC` trainer uses training-only imputation/scaling, one-vs-rest Platt sigmoid on independent validation, Brier/ECE and correctness-F1 rejection threshold; JSON/NumPy inference is integrated in CLI/GUI/runtime, and the joblib path was removed.
+- 分组实现已增加 dataset 内 speaker/recording/source-recording/augmentation 连通组、规范化绝对路径、非空 WAV SHA-256；每 split 输出 sample/class/speaker/group/dataset counts 与 missing class 标签。回归测试覆盖同一路径伪造不同 speaker/recording ID、跨路径复制内容和增强组。
+- simple/full 同一 split 训练并可独立 held-out evaluation；评估支持 clean、20/10/5/0dB white noise、manifest-based music/fan/environment、RIR reverb、independent other-speaker overlap，并报告 per-stage latency/CPU/RSS/size/params/coverage/error。没有真实语料/噪声源文件时，实际指标仍未评估。
+- 仓库没有真实标注音频、声纹注册样本或模型权重；合成测试只能证实程序行为，不能作为情绪性能或环境鲁棒证据。
+- simple/full 当前可由同一 evaluator 入口成对评测，固定相同 manifest、seed、噪声清单与条件；结果逐条件给出 `full - simple` 差值。此实现保证测试条件一致，不代表训练出的任一模型已具备有效情绪性能。
+- `EmoLight_emotion_phase2.patch` 在可访问附件与仓库位置中未找到；本分支据用户 Phase 3 规格独立实现等价的数据隔离、特征、校准、部署及评测路径。未声称逐行合入或核验该补丁。
+- 最终软件回归为 96 passed，CLI/package 入口和静态检查通过。数据集、真实背景噪声源、目标身份验证模型与灯带硬件均不可用，因此真实情绪性能、环境泛化、身份验证与硬件行为没有验证。
+
+## Phase 4 official data findings
+- 官方 [audEERING EmoDB dataset documentation](https://audeering.github.io/datasets/datasets/emodb.html) 描述德语表演语音、16 kHz mono PCM、10 位演员，正式 label schemes 包含 neutral/happiness/anger/sadness 及其他类；其当前 2.0 文档为 CC0-1.0，但这不是用户指定的旧 Zenodo artifact。
+- 用户指定的 Zenodo record 7447302 API 当前返回 Berlin EmoDB 1.3.0、`emodb.zip` 39,981,818 bytes、record metadata license `CC-BY-4.0`、MD5 `9d21362dbc5676ef3ab4745d83ced0db`。压缩包内部 `db.yaml` 另写 CC0-1.0；为保守合规，按 Zenodo record metadata 的 CC-BY-4.0 做署名。
+- 本机下载的文件尺寸和 MD5 已逐字节核对通过，zip CRC 检查通过；535 个 WAV 和官方 gold train/test CSV 对应 6 个 train speakers、4 个 test speakers。四分类表格计数 train: angry 72/neutral 52/happy 44/sad 35；test: angry 55/neutral 27/happy 27/sad 27。最终训练/验证/测试必须仅对四类进行派生计数，且按原官方 test speaker 组隔离。
+- 官方 EmoDB 文件名格式为 `<speaker><text><emotion-code><version>.wav`；映射明确为 N neutral、F happiness、W anger、T sadness。zip gold table 同时含 A=fear、E=disgust、L=boredom，绝不把 A 映射为 angry。
+- archive 下载路径位于 `.gitignore` 的 `/data/private/`；任何原始或切片 WAV 均不得提交。

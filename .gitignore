@@ -6,3 +6,23 @@ __pycache__/
 venv/
 dist/
 build/
+.worktrees/
+
+# Local recordings, speaker references, and model artifacts must stay out of Git.
+*.wav
+*.flac
+*.mp3
+*.ogg
+*.joblib
+*.pkl
+*.pickle
+*.onnx
+*.pt
+*.pth
+*.npy
+*.npz
+*manifest*.csv
+/models/*.json
+/data/private/
+/recordings/
+/speaker_refs/

@@ -3,7 +3,7 @@ import wave
 import numpy as np
 
 from emolight.audio.wav import load_wav
-from emolight.emotion.predictor import UnconfiguredEmotionPredictor
+from emolight.emotion.predictor import ModelStatus, UnconfiguredEmotionPredictor
 from emolight.features.acoustic import extract_features
 from emolight.events import SystemStatus
 
@@ -44,3 +44,4 @@ def test_silence_is_marked_low_quality(tmp_path):
 
     assert features.audio_quality < 0.5
     assert event.status is SystemStatus.LOW_QUALITY
+    assert event.model_status is ModelStatus.NOT_CONFIGURED

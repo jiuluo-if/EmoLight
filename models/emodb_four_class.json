@@ -1,0 +1,475 @@
+{
+  "format_version": 1,
+  "model_version": "emolight-linear-numpy-v1",
+  "feature_profile": "full",
+  "feature_schema_version": "emotion-prosody-24-v1",
+  "feature_names": [
+    "f0_median_hz",
+    "f0_mean_hz",
+    "f0_std_hz",
+    "f0_range_hz",
+    "f0_delta_mean_hz_s",
+    "f0_delta_std_hz_s",
+    "f0_slope_hz_s",
+    "f0_valid_fraction",
+    "mean_periodicity",
+    "rms_mean",
+    "rms_std",
+    "rms_q10",
+    "rms_q90",
+    "rms_range",
+    "log_rms_mean",
+    "log_rms_std",
+    "rms_delta_mean_s",
+    "rms_delta_std_s",
+    "rms_slope_s",
+    "active_fraction",
+    "pause_fraction",
+    "longest_active_run_fraction",
+    "zcr_mean",
+    "hnr_median_db"
+  ],
+  "sample_rate": 16000,
+  "frame_ms": 25.0,
+  "hop_ms": 10.0,
+  "activity_rms_threshold": 0.01,
+  "window_s": 1.5,
+  "update_interval_s": 0.5,
+  "quality_gates": {
+    "min_activity_ratio": 0.2,
+    "min_contiguous_active_frames": 3,
+    "clipping_limit": 0.05,
+    "minimum_snr_db": 5.0,
+    "acceptable_snr_db": 10.0
+  },
+  "classes": [
+    "angry",
+    "happy",
+    "neutral",
+    "sad"
+  ],
+  "imputation_values": [
+    212.6514892578125,
+    225.9731674194336,
+    67.13895034790039,
+    336.72584533691406,
+    -82.2739028930664,
+    4641.7978515625,
+    -13.709590435028076,
+    0.4899328947067261,
+    0.38049161434173584,
+    0.11093193292617798,
+    0.06887469440698624,
+    0.037673838436603546,
+    0.21161863207817078,
+    0.29496321082115173,
+    -2.46480393409729,
+    0.6352346539497375,
+    -0.005053333472460508,
+    2.375941038131714,
+    -0.014256314374506474,
+    1.0,
+    0.0,
+    0.9933333396911621,
+    0.2962271571159363,
+    1.5776697993278503
+  ],
+  "standardization_mean": [
+    221.97926723674192,
+    233.51447485368803,
+    75.57600060434216,
+    335.6428073390953,
+    -39.73053622324644,
+    6088.7997176926465,
+    -12.373513236928822,
+    0.4877083892781435,
+    0.4003952491418116,
+    0.11812127890195101,
+    0.07006479478993659,
+    0.05239236275143676,
+    0.2177750357337254,
+    0.2950136627433664,
+    -2.5168999858046206,
+    0.7247678045274624,
+    -0.013112256572586595,
+    2.4162732373747673,
+    -0.013422780699469216,
+    0.9598554074932626,
+    0.0401445922815362,
+    0.8511337148239608,
+    0.2768254197509556,
+    1.7576311199782897
+  ],
+  "standardization_scale": [
+    78.81447769531857,
+    66.47530448953178,
+    45.69493073697535,
+    150.6154027403882,
+    1115.4091862396338,
+    6255.325114119124,
+    151.84042874735314,
+    0.23338087217210016,
+    0.14143247305908818,
+    0.052077368922111435,
+    0.024368872646043812,
+    0.04778382602878883,
+    0.07676016511075882,
+    0.09973291794252001,
+    0.6214204082608366,
+    0.412886886458902,
+    0.07317354383138563,
+    0.8251206374099679,
+    0.056805304297010466,
+    0.09015994392963642,
+    0.09015994399151778,
+    0.25744686348101486,
+    0.10700234727907888,
+    2.487834489975092
+  ],
+  "weights": [
+    [
+      -0.5644723346002748,
+      0.9046725710667501,
+      -0.590551322945895,
+      0.1297240310353119,
+      0.0030732340147982913,
+      0.40583846889921515,
+      0.08046312154040342,
+      0.5875332158968715,
+      0.5367813698981416,
+      0.3576002478662912,
+      -0.01011015240334858,
+      -0.26829135083484873,
+      0.12054394260529638,
+      0.2600507441208919,
+      -0.8831620488517201,
+      0.155679668989791,
+      -0.016351134509282626,
+      -0.3137449574647911,
+      0.1133940404595198,
+      0.08130447541964435,
+      -0.0813045904313899,
+      -0.2266261836384134,
+      1.6816164596143661,
+      -0.32498096223995987
+    ],
+    [
+      0.14767194342466228,
+      -0.21376360006126216,
+      0.20947397571234147,
+      0.050322502964563254,
+      -0.002799155531373339,
+      -0.1814369408096416,
+      0.017944018552518096,
+      0.45848478186965563,
+      -0.25319809021049744,
+      -0.7801017178729966,
+      -0.3588471708250782,
+      0.5883465172610891,
+      -0.1379424323233255,
+      0.0817800089358258,
+      0.6657753104760887,
+      0.2565631022950852,
+      -0.014522838513843117,
+      0.47135108545213666,
+      -0.09628075972762017,
+      -0.011635119382855275,
+      0.011634023684531966,
+      -0.029742474126494223,
+      0.1462460843300548,
+      0.36099119142002334
+    ],
+    [
+      0.0472823724391216,
+      -0.43090359768983233,
+      0.19403924074498646,
+      -0.05132383487460874,
+      0.05511222206234,
+      -0.13720144490225525,
+      0.006562395091124962,
+      0.6282177409068818,
+      -0.8479994728451389,
+      1.16486776442934,
+      -1.2828553796864515,
+      -1.210461713730941,
+      0.1501827002370068,
+      -0.11905640776730635,
+      0.44014360485320003,
+      -0.028770089649880686,
+      0.1134543770326618,
+      0.40674005737816576,
+      -0.480697175510567,
+      -0.007648275291762779,
+      0.00764805211449952,
+      -0.08720701005464114,
+      -0.11500725126877427,
+      0.3870762447877879
+    ],
+    [
+      0.26098285918386793,
+      -1.0476814718246512,
+      0.7714912319019482,
+      -0.41303799546188036,
+      -0.08386844482251497,
+      0.03422339491096352,
+      -0.0488435994158392,
+      0.32841125197598636,
+      -1.4362532291270456,
+      -0.6983810671093924,
+      0.969795944285705,
+      0.5661065932445613,
+      0.4557948709362919,
+      -0.30220693970950463,
+      -0.21149787161027447,
+      -0.3278208791153865,
+      -0.045090957122453375,
+      -0.5103928259460102,
+      0.20112096533898885,
+      -0.05444114859967583,
+      0.05444272400574511,
+      0.2490020995747912,
+      -0.6162489482076957,
+      0.5826849815308358
+    ]
+  ],
+  "intercepts": [
+    -0.614742674072967,
+    -0.6344385614113998,
+    -1.0138757924941881,
+    -1.137644757796639
+  ],
+  "calibration_slopes": [
+    1.9437275269652343,
+    4.154575604654745,
+    2.8457011293263417,
+    3.65374289642737
+  ],
+  "calibration_intercepts": [
+    0.302360746101873,
+    -0.38731246325929497,
+    0.5759028338070636,
+    0.009266041317859457
+  ],
+  "rejection_threshold": 0.4009412215702857,
+  "calibration_status": "CALIBRATED",
+  "calibration_method": "one-vs-rest sigmoid on independent validation split",
+  "training_library": {
+    "scikit_learn_version": "1.9.0",
+    "classifier": "LinearSVC",
+    "C": 1.0,
+    "dual": "auto",
+    "random_state": 42,
+    "standardization": "training split only",
+    "imputation": "per-feature training median; fail if a column has no observations"
+  },
+  "training_manifest_sha256": "05af93afa20b8d51acdfd29846feec0cea874780e669447d061d2b51be8a22d1",
+  "label_mapping": {
+    "neutral": "neutral",
+    "neu": "neutral",
+    "n": "neutral",
+    "happy": "happy",
+    "hap": "happy",
+    "f": "happy",
+    "angry": "angry",
+    "ang": "angry",
+    "w": "angry",
+    "sad": "sad",
+    "s": "sad",
+    "t": "sad"
+  },
+  "label_mapping_sha256": "80f80ee500a0028a7a8cc97a2027780ef39ef0cec1203c5c377132e9c0dea6a9",
+  "dataset_split": {
+    "method": "preassigned speaker-exclusive official dataset split",
+    "seed": 42,
+    "record_counts": {
+      "train": 577,
+      "validation": 254,
+      "test": 569
+    },
+    "group_counts": {
+      "train": 4,
+      "validation": 2,
+      "test": 4
+    },
+    "subsets": {
+      "train": {
+        "sample_count": 577,
+        "speaker_count": 4,
+        "group_count": 4,
+        "dataset_counts": {
+          "emodb-1.3.0": 577
+        },
+        "class_counts": {
+          "neutral": 108,
+          "happy": 120,
+          "angry": 183,
+          "sad": 166
+        },
+        "missing_classes": []
+      },
+      "validation": {
+        "sample_count": 254,
+        "speaker_count": 2,
+        "group_count": 2,
+        "dataset_counts": {
+          "emodb-1.3.0": 254
+        },
+        "class_counts": {
+          "neutral": 66,
+          "happy": 34,
+          "angry": 94,
+          "sad": 60
+        },
+        "missing_classes": []
+      },
+      "test": {
+        "sample_count": 569,
+        "speaker_count": 4,
+        "group_count": 4,
+        "dataset_counts": {
+          "emodb-1.3.0": 569
+        }
+      }
+    }
+  },
+  "validation": {
+    "sample_count": 235,
+    "manifest_sha256": "05af93afa20b8d51acdfd29846feec0cea874780e669447d061d2b51be8a22d1",
+    "threshold_selected_on": "validation",
+    "threshold_selection_method": "maximize F1 for validation correctness; ties choose higher threshold",
+    "threshold_metrics": {
+      "correctness_f1": 0.883054892601432,
+      "accepted_count": 234,
+      "coverage": 0.9957446808510638,
+      "rejection_rate": 0.004255319148936176,
+      "accepted_error_count": 49,
+      "accepted_error_rate": 0.2094017094017094
+    },
+    "brier_score": 0.3297235517681487,
+    "ece": 0.061965325023290045,
+    "class_counts": {
+      "neutral": 65,
+      "happy": 34,
+      "angry": 94,
+      "sad": 42
+    },
+    "rejected_quality_counts": {
+      "LOW_QUALITY": 1,
+      "UNCERTAIN": 18
+    }
+  },
+  "training": {
+    "sample_count": 2655,
+    "original_sample_count": 531,
+    "augmented_sample_count": 2124,
+    "recording_count": 131,
+    "speaker_count": 4,
+    "class_counts": {
+      "neutral": 515,
+      "happy": 600,
+      "angry": 915,
+      "sad": 625
+    },
+    "split_method": "preassigned speaker-exclusive official dataset split",
+    "seed": 42,
+    "white_noise_augmentation_snr_db": [
+      20.0,
+      10.0,
+      5.0,
+      0.0
+    ],
+    "background_noise_augmentation_snr_db": [],
+    "background_noise_manifest_sha256": null,
+    "background_noise_source_sha256": {},
+    "reverb_augmentation_enabled": false,
+    "reverb_augmented_sample_count": 0,
+    "augmented_rows_by_snr": {
+      "20dB": 531,
+      "10dB": 531,
+      "5dB": 531,
+      "0dB": 531
+    }
+  },
+  "dataset_provenance": {
+    "dataset_id": "emodb-1.3.0",
+    "dataset_name": "Berlin Database of Emotional Speech (EmoDB)",
+    "dataset_version": "1.3.0",
+    "source_record": "https://zenodo.org/records/7447302",
+    "doi": "10.5281/zenodo.7447302",
+    "license": "CC-BY-4.0",
+    "attribution": "Burkhardt, F., Paeschke, A., Kienast, M., Sendlmeier, W. F., & Weiss, B. Berlin EmoDB 1.3.0, Zenodo record 7447302, https://doi.org/10.5281/zenodo.7447302",
+    "archive_md5": "9d21362dbc5676ef3ab4745d83ced0db",
+    "archive_bytes": 39981818,
+    "archive_internal_license_metadata": "CC0-1.0; Zenodo record metadata is treated conservatively as CC-BY-4.0",
+    "language": "German",
+    "speech_type": "acted emotional utterances",
+    "sample_rate_hz": 16000,
+    "channels": 1,
+    "bit_depth": 16,
+    "label_code_mapping": {
+      "N": "neutral",
+      "F": "happy",
+      "W": "angry",
+      "T": "sad",
+      "A": "ignored fear"
+    },
+    "ignored_emotion_counts": {
+      "boredom": 81,
+      "disgust": 46,
+      "fear": 69
+    },
+    "official_gold_utterance_counts": {
+      "train": 304,
+      "test": 231
+    },
+    "official_gold_class_counts": {
+      "train": {
+        "anger": 72,
+        "boredom": 45,
+        "disgust": 20,
+        "fear": 36,
+        "happiness": 44,
+        "neutral": 52,
+        "sadness": 35
+      }
+    },
+    "split_speaker_ids": {
+      "validation": [
+        "03",
+        "09"
+      ],
+      "train": [
+        "08",
+        "10",
+        "11",
+        "13"
+      ],
+      "test": [
+        "12",
+        "14",
+        "15",
+        "16"
+      ]
+    },
+    "split_window_class_counts": {
+      "train": {
+        "angry": 183,
+        "happy": 120,
+        "neutral": 108,
+        "sad": 166
+      },
+      "validation": {
+        "angry": 94,
+        "happy": 34,
+        "neutral": 66,
+        "sad": 60
+      }
+    },
+    "window_s": 1.5,
+    "stride_s": 0.5,
+    "window_count": 1400,
+    "seed": 42,
+    "split_protocol": "official 1.3.0 gold test speakers remain held out; validation speakers selected only from official train speakers",
+    "test_set_used_for_tuning": false
+  }
+}

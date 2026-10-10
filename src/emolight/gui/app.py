@@ -1,41 +1,84 @@
 import time
 import tkinter as tk
 from tkinter import ttk
+from dataclasses import replace
 
 from emolight.audio.microphone import MicrophoneAudioSource
-from emolight.config import LightingConfig
+from emolight.config import AppConfig, LightingConfig
 from emolight.demo import make_demo_event
+from emolight.emotion.predictor import ModelStatus, UnconfiguredEmotionPredictor
+from emolight.emotion.linear import NumpyLinearEmotionPredictor
 from emolight.events import Emotion
 from emolight.lighting.controller import SimulatorLightController
 from emolight.lighting.policy import EmotionLightingPolicy, LightCommand
-from emolight.runtime.pipeline import RealtimeFeatureRuntime
+from emolight.runtime.pipeline import RealtimeFeatureRuntime, RuntimeSnapshot
+from emolight.runtime.result_queue import LatestOnlyQueue
+from emolight.speaker.verifier import UnconfiguredSpeakerVerifier
 
 
 class EmotionSimulatorApp:
-    def __init__(self, root: tk.Tk, config: LightingConfig | None = None) -> None:
+    def __init__(self, root: tk.Tk, config: AppConfig | LightingConfig | None = None) -> None:
         self.root = root
         self.root.title("EmoLight | 本地灯光模拟器")
         self.root.minsize(620, 470)
-        self.policy = EmotionLightingPolicy(config or LightingConfig())
+        app_config = config if isinstance(config, AppConfig) else AppConfig(lighting=config or LightingConfig())
+        self.config = app_config
+        self.policy = EmotionLightingPolicy(app_config.lighting)
         self.controller = SimulatorLightController()
         self.automatic = tk.BooleanVar(value=True)
         self.night = tk.BooleanVar(value=False)
         self.manual_override = False
         self.mic_source: MicrophoneAudioSource | None = None
-        self.runtime = RealtimeFeatureRuntime()
+        self._mic_session_id = 0
+        predictor = UnconfiguredEmotionPredictor()
+        self.model_load_error: str | None = None
+        if app_config.emotion_model_path:
+            try:
+                predictor = NumpyLinearEmotionPredictor.load(
+                    app_config.emotion_model_path,
+                    expected_sample_rate=app_config.audio.sample_rate_hz,
+                    expected_frame_ms=app_config.audio.frame_ms,
+                    expected_hop_ms=app_config.audio.hop_ms,
+                    expected_activity_rms_threshold=app_config.audio.activity_rms_threshold,
+                )
+            except (OSError, ValueError, RuntimeError) as error:
+                self.model_load_error = str(error)
+        audio = app_config.audio
+        self.runtime = RealtimeFeatureRuntime(
+            sample_rate=audio.sample_rate_hz,
+            window_s=audio.window_s,
+            update_interval_s=audio.update_interval_s,
+            predictor=predictor,
+            speaker_verifier=UnconfiguredSpeakerVerifier(),
+            frame_ms=audio.frame_ms,
+            hop_ms=audio.hop_ms,
+            activity_rms_threshold=audio.activity_rms_threshold,
+            clipping_limit=audio.clipping_limit,
+            minimum_snr_db=audio.minimum_snr_db,
+            acceptable_snr_db=audio.acceptable_snr_db,
+            min_activity_ratio=audio.min_activity_ratio,
+            min_contiguous_active_frames=audio.min_contiguous_active_frames,
+            min_audio_quality=audio.min_audio_quality,
+            min_speaker_confidence=audio.min_speaker_confidence,
+        )
+        self.result_queue: LatestOnlyQueue[RuntimeSnapshot] = LatestOnlyQueue()
+        self._closed = False
+        self._last_rendered_timestamp_ms = -1
         self._draw_rgb = (244, 231, 210)
         self._draw_brightness = 0.12
         self._transition_callback: str | None = None
         self._build()
+        self._update_recognition_status("未接入")
         self._render_lights()
         self.root.protocol("WM_DELETE_WINDOW", self._close)
+        self._poll_results()
 
     def _build(self) -> None:
         outer = ttk.Frame(self.root, padding=18)
         outer.pack(fill="both", expand=True)
         ttk.Label(outer, text="EmoLight", font=("Segoe UI", 20, "bold")).pack(anchor="w")
         ttk.Label(outer, text="SIMULATION  ·  演示事件，不代表真实情绪或身份识别", foreground="#9a5600").pack(anchor="w", pady=(0, 8))
-        self.status = ttk.Label(outer, text="真实识别：NOT_CONFIGURED  |  麦克风：未接入")
+        self.status = ttk.Label(outer, text="", wraplength=580)
         self.status.pack(anchor="w", pady=(0, 12))
         self.quality = ttk.Label(outer, text="当前音频质量：未采样")
         self.quality.pack(anchor="w", pady=(0, 8))
@@ -119,31 +162,75 @@ class EmotionSimulatorApp:
 
     def _toggle_microphone(self) -> None:
         if self.mic_source is not None:
-            self.mic_source.stop()
-            self.mic_source = None
-            self.status.configure(text="真实识别：NOT_CONFIGURED  |  麦克风：已停止")
+            self._mic_session_id += 1
+            source, self.mic_source = self.mic_source, None
+            source.stop()
+            self._update_recognition_status("已停止")
             return
-        source = MicrophoneAudioSource(sample_rate=self.runtime.sample_rate)
-        try:
-            source.start(self._process_audio_frame)
-        except RuntimeError as error:
-            self.status.configure(text=f"麦克风不可用：{error}")
-            return
+        source = MicrophoneAudioSource(
+            sample_rate=self.runtime.sample_rate,
+            frame_ms=self.config.audio.capture_frame_ms,
+        )
+        self._mic_session_id += 1
+        session_id = self._mic_session_id
         self.mic_source = source
-        self.status.configure(text="真实识别：NOT_CONFIGURED  |  麦克风：已连接，情绪自动灯光仍拒识")
+        try:
+            source.start(lambda frame: self._process_audio_frame(frame, session_id=session_id))
+        except RuntimeError as error:
+            self.mic_source = None
+            self._update_recognition_status(f"不可用：{error}")
+            return
+        self._update_recognition_status("已连接")
 
-    def _process_audio_frame(self, samples) -> None:
-        event = self.runtime.feed(samples, timestamp_ms=round(time.monotonic() * 1000))
-        if event is not None:
-            try:
-                self.root.after(0, lambda result=event: self._show_live_status(result))
-            except tk.TclError:
-                pass
+    def _update_recognition_status(self, microphone_status: str) -> None:
+        if self.model_load_error:
+            emotion_status = "INVALID（模型加载失败）"
+        else:
+            model_status = getattr(self.runtime.predictor, "model_status", ModelStatus.NOT_CONFIGURED)
+            emotion_status = model_status.value
+        if self.config.speaker_model_path:
+            speaker_status = "NOT_CONFIGURED（声纹适配器尚未接入）"
+        else:
+            speaker_status = "NOT_CONFIGURED"
+        self.status.configure(
+            text=(
+                f"目标身份：{speaker_status} · 情绪模型：{emotion_status} · 麦克风：{microphone_status}"
+                " · 身份未验证时实时情绪事件拒识"
+            )
+        )
 
-    def _show_live_status(self, event) -> None:
-        quality = self.runtime.latest_features.audio_quality if self.runtime.latest_features else 0.0
+    def _process_audio_frame(self, frame, *, session_id: int | None = None) -> None:
+        if (
+            self._closed
+            or self.mic_source is None
+            or (session_id is not None and session_id != self._mic_session_id)
+        ):
+            return
+        snapshot = self.runtime.feed_snapshot(frame.samples, timestamp_ms=frame.timestamp_ms)
+        if snapshot is not None and not self._closed and self.mic_source is not None and (
+            session_id is None or session_id == self._mic_session_id
+        ):
+            self.result_queue.publish(snapshot)
+
+    def _poll_results(self) -> None:
+        if self._closed:
+            return
+        snapshot = self.result_queue.take_latest()
+        if snapshot is not None and snapshot.timestamp_ms > self._last_rendered_timestamp_ms:
+            self._show_live_status(snapshot)
+            self._last_rendered_timestamp_ms = snapshot.timestamp_ms
+        self.root.after(50, self._poll_results)
+
+    def _show_live_status(self, snapshot: RuntimeSnapshot) -> None:
+        event = snapshot.event
+        features = snapshot.acoustic_features
         dropped = self.mic_source.dropped_frames if self.mic_source is not None else 0
-        self.quality.configure(text=f"当前音频质量：{quality:.0%}  |  状态：{event.status.value}  |  丢帧：{dropped}")
+        self.quality.configure(
+            text=(
+                f"当前音频质量：{features.audio_quality:.0%} ({features.quality_status.value})"
+                f"  |  活动占比：{features.activity_ratio:.0%}  |  状态：{event.status.value}  |  丢帧：{dropped}"
+            )
+        )
         self.event.configure(text=f"LIVE · {event.status.value} · 未输出情绪预测")
         for emotion, value in self.score_vars.items():
             value.set(f"{emotion.value}: —")
@@ -153,9 +240,11 @@ class EmotionSimulatorApp:
             self.timeline.delete(12, tk.END)
 
     def _close(self) -> None:
+        self._closed = True
+        self._mic_session_id += 1
         if self.mic_source is not None:
-            self.mic_source.stop()
-            self.mic_source = None
+            source, self.mic_source = self.mic_source, None
+            source.stop()
         self.root.destroy()
 
     def _apply(self, command: LightCommand) -> None:
@@ -194,7 +283,7 @@ class EmotionSimulatorApp:
             self.canvas.create_oval(x - 9, 42, x + 9, 60, fill=color, outline="")
 
 
-def launch(config: LightingConfig | None = None) -> None:
+def launch(config: AppConfig | LightingConfig | None = None) -> None:
     root = tk.Tk()
     EmotionSimulatorApp(root, config)
     root.mainloop()
